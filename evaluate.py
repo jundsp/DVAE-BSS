@@ -39,7 +39,7 @@ parser.add_argument('--kernel-size', type=int, default=8, metavar='fname',
                     help='size of sliding kernel (in time)')
 parser.add_argument('--overlap', type=int, default=2, metavar='fname',
                     help='size of sliding kernel (in time)')
-parser.add_argument('--num-sources', type=int, default=5, metavar='fname',
+parser.add_argument('--num-sources', type=int, default=2, metavar='fname',
                     help='number of sources in the model')
 parser.add_argument('--num-layers', type=int, default=2, metavar='fname',
                     help='number of sources in the model')
