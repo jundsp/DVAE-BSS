@@ -21,7 +21,7 @@ class SVAE(nn.Module):
         chans = 64
 
         self.latent_q = nn.Sequential(
-            nn.Linear(dimg,2*chans),
+            nn.Linear(2*dimg,2*chans),
             nn.ReLU(),
             nn.Linear(2*chans,chans),
             nn.ReLU(),
@@ -29,7 +29,7 @@ class SVAE(nn.Module):
             )
 
         self.latent_q0 = nn.Sequential(
-            nn.Linear(dimg,2*chans),
+            nn.Linear(2*dimg,2*chans),
             nn.ReLU(),
             nn.Linear(2*chans,chans),
             nn.ReLU(),
@@ -77,7 +77,6 @@ class SVAE(nn.Module):
         gx = gx.transpose(-2,-1)
         g0 = torch.zeros(2*self.num_layers,gx.size(0),self.dimg,device=x.device)
         g,_ = self.gru_infer(gx,g0)
-        g = 1/2*(g[:,:,:self.dimg] + g[:,:,self.dimg:])
         q = self.latent_q(g)
         q0 = self.latent_q0(g[:,0].unsqueeze(1))
         q = self.source_as_batch(q)
