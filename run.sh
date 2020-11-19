@@ -37,7 +37,7 @@ python $SOURCEDIR/train.py \
 --kernel-size 16 \
 --overlap 2 \
 --mix-data True \
---num-sources 5 \
+--num-sources 4 \
 --dataset MNIST \
 --net-type pooled \
 --num-layers 2 \
