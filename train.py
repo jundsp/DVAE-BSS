@@ -167,8 +167,8 @@ writer = SummaryWriter(comment='ConvSVAE_' + str(args.dataset))
 
 dimx = dim_data[0]
 dimz = 64
-dimh = 128
-dimg = 128
+dimh = 256
+dimg = 256
 lr = 2e-4
 
 model_name = ('{}/model_{}_K{}_L{}_{}.pt').format(path_saves,args.dataset,str(args.num_sources),str(args.num_layers),args.net_type)
