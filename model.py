@@ -9,7 +9,7 @@ import argparse
 from torchvision import datasets, transforms
 
 class DSAE(nn.Module):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, num_sources=1, net_type='pooled', num_layers=1):
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1):
         super(DSAE, self).__init__()
         self.dimx, self.dimz, self.dimh, self.dimg = dimx, dimz, dimh, dimg
         self.num_sources = num_sources
@@ -17,8 +17,6 @@ class DSAE(nn.Module):
 
         self.gru_generate = nn.LSTM(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
         self.gru_infer = nn.LSTM(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
-
-        chans = 64
 
         self.mu_q = nn.Sequential(
             nn.Linear(dimg,chans),
@@ -213,8 +211,8 @@ class PooledEncoder(nn.Module):
             nn.Conv1d(64,128,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(128),
             nn.Conv1d(128,256,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(256),
             nn.Conv1d(256,256,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(256),
-            nn.Conv1d(256,256,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(256),
-            nn.Conv1d(256,output_channels,kernel_size=3,stride=1,padding=1), nn.BatchNorm1d(256), nn.ReLU(),
+            nn.Conv1d(256,512,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(512),
+            nn.Conv1d(512,output_channels,kernel_size=3,stride=1,padding=1), nn.BatchNorm1d(256), nn.ReLU(),
             )
     def forward(self, x):
         return self.Network(x)
@@ -225,8 +223,8 @@ class PooledDecoder(nn.Module):
         upsample = nn.Upsample(scale_factor=2,mode='linear',align_corners=False)
         # upsample = SincInterpolation(scale_factor=2)
         self.Network = nn.Sequential(
-            nn.ConvTranspose1d(input_channels,256,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(256), upsample,
-            nn.ConvTranspose1d(256,256,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(256), upsample,
+            nn.ConvTranspose1d(input_channels,512,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(512), upsample,
+            nn.ConvTranspose1d(512,256,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(256), upsample,
             nn.ConvTranspose1d(256,256,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(256), upsample,
             nn.ConvTranspose1d(256,128,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(128), upsample,
             nn.ConvTranspose1d(128,64,kernel_size=3,stride=1,padding=1), nn.ReLU(), upsample,

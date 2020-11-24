@@ -148,7 +148,7 @@ if args.dataset == 'MNIST':
     train_set = datasets.MNIST(args.data_directory, train=True, transform=transform)
     test_set = datasets.MNIST(args.data_directory, train=False, transform=transform)
 if args.dataset == 'MUMS':
-    dim_data = (128,512)
+    dim_data = (128,256)
     # args.data_directory = '/Volumes/Julian SSD/data/MUMS'
     train_set = MUMS(args.data_directory,train=True,duration=dim_data[1], bins=dim_data[0],magnitude=False)
     test_set = MUMS(args.data_directory, train=False, duration=dim_data[1], bins=dim_data[0],magnitude=False)
@@ -166,9 +166,9 @@ os.makedirs(path_saves,exist_ok=True)
 writer = SummaryWriter(comment='ConvSVAE_' + str(args.dataset))
 
 dimx = dim_data[0]
-dimz = 16
-dimh = 64
-dimg = 64
+dimz = 64
+dimh = 128
+dimg = 128
 lr = 2e-4
 
 model_name = ('{}/model_{}_K{}_L{}_{}.pt').format(path_saves,args.dataset,str(args.num_sources),str(args.num_layers),args.net_type)
