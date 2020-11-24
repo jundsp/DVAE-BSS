@@ -213,7 +213,8 @@ class PooledEncoder(nn.Module):
             nn.Conv1d(64,128,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(128),
             nn.Conv1d(128,256,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(256),
             nn.Conv1d(256,256,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(256),
-            nn.Conv1d(256,output_channels,kernel_size=3,stride=1,padding=1), nn.ReLU(),
+            nn.Conv1d(256,256,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(256),
+            nn.Conv1d(256,output_channels,kernel_size=3,stride=1,padding=1), nn.BatchNorm1d(256), nn.ReLU(),
             )
     def forward(self, x):
         return self.Network(x)
@@ -225,6 +226,7 @@ class PooledDecoder(nn.Module):
         # upsample = SincInterpolation(scale_factor=2)
         self.Network = nn.Sequential(
             nn.ConvTranspose1d(input_channels,256,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(256), upsample,
+            nn.ConvTranspose1d(256,256,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(256), upsample,
             nn.ConvTranspose1d(256,256,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(256), upsample,
             nn.ConvTranspose1d(256,128,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(128), upsample,
             nn.ConvTranspose1d(128,64,kernel_size=3,stride=1,padding=1), nn.ReLU(), upsample,
