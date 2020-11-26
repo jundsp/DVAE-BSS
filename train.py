@@ -43,7 +43,7 @@ parser.add_argument('--num-sources', type=int, default=2, metavar='fname',
                     help='number of sources in the model')
 parser.add_argument('--data-directory', type=str, default='/Users/julian/Documents/Code/Compute_Canada/data', metavar='fname',
                     help='Folder containing the spectrogram data')
-parser.add_argument('--net-type', type=str, default='strided', metavar='fname',
+parser.add_argument('--net-type', type=str, default='pooled', metavar='fname',
                     help='name of the dataset')
 parser.add_argument('--num-layers', type=int, default=2, metavar='fname',
                     help='number of sources in the model')
@@ -140,7 +140,7 @@ args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if args.cuda else "cpu")
 kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if args.cuda else {}
 
-# args.dataset = 'MNIST'
+args.dataset = 'MUMS'
 if args.dataset == 'MNIST':
     dim_data = (32,64)
     # args.data_directory = '/Users/julian/Documents/Code/Compute_Canada/data'
@@ -149,7 +149,7 @@ if args.dataset == 'MNIST':
     test_set = datasets.MNIST(args.data_directory, train=False, transform=transform)
 if args.dataset == 'MUMS':
     dim_data = (128,256)
-    # args.data_directory = '/Volumes/Julian SSD/data/MUMS'
+    args.data_directory = '/Volumes/Julian SSD/data/MUMS'
     train_set = MUMS(args.data_directory,train=True,duration=dim_data[1], bins=dim_data[0],magnitude=False)
     test_set = MUMS(args.data_directory, train=False, duration=dim_data[1], bins=dim_data[0],magnitude=False)
 if args.dataset == 'Audio':
