@@ -1,12 +1,7 @@
+#%%
 import torch
-from torch import nn, optim
-from torch.nn import functional as F
+from torch import nn
 import math
-import torchaudio
-import os
-import matplotlib.pyplot as plt
-import argparse
-from torchvision import datasets, transforms
 
 class DSAE(nn.Module):
     def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1):
@@ -149,6 +144,7 @@ class DSAE(nn.Module):
 
     def loss_function(self,x,mu_x,mu,logvar,mu_prior,logvar_prior, mu0, logvar0 ):
         n = x.size(0)
+        # Si-SDR? scale the target... but it is the mixture.
         ell = self.likelihood(x, mu_x, var=self.get_variance()) / n
         # ell = self.criteria(mu_x,x) / n        
         kld = KLD(mu,logvar,prior_mean=mu_prior,prior_logvar=logvar_prior) / n
@@ -179,9 +175,7 @@ class StridedEncoder(nn.Module):
         super(StridedEncoder, self).__init__()
         self.Network = nn.Sequential(
             nn.Conv1d(input_channels,128,kernel_size=4,stride=2,padding=1), nn.ReLU(), nn.BatchNorm1d(128),
-            # nn.Conv1d(64,128,kernel_size=4,stride=2,padding=1), nn.ReLU(), nn.BatchNorm1d(128),
             nn.Conv1d(128,256,kernel_size=4,stride=2,padding=1), nn.ReLU(), nn.BatchNorm1d(256),
-            # nn.Conv1d(256,256,kernel_size=4,stride=2,padding=1), nn.ReLU(), nn.BatchNorm1d(256),
             nn.Conv1d(256,output_channels,kernel_size=3,stride=1,padding=1), nn.ReLU(),
             )
     def forward(self, x):
@@ -192,9 +186,7 @@ class StridedDecoder(nn.Module):
         super(StridedDecoder, self).__init__()
         self.Network = nn.Sequential(
             nn.ConvTranspose1d(input_channels,256,kernel_size=4,stride=2,padding=1), nn.ReLU(), nn.BatchNorm1d(256),
-            # nn.ConvTranspose1d(256,256,kernel_size=4,stride=2,padding=1), nn.ReLU(), nn.BatchNorm1d(256),
             nn.ConvTranspose1d(256,128,kernel_size=4,stride=2,padding=1), nn.ReLU(), nn.BatchNorm1d(128),
-            # nn.ConvTranspose1d(128,64,kernel_size=4,stride=2,padding=1), nn.ReLU(),
             nn.ConvTranspose1d(128,output_channels,kernel_size=3,stride=1,padding=1), nn.Sigmoid(), 
             )
     def forward(self, x):
@@ -212,7 +204,7 @@ class PooledEncoder(nn.Module):
             nn.Conv1d(128,256,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(256),
             nn.Conv1d(256,256,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(256),
             nn.Conv1d(256,512,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(512),
-            nn.Conv1d(512,output_channels,kernel_size=3,stride=1,padding=1), nn.BatchNorm1d(256), nn.ReLU(),
+            nn.Conv1d(512,output_channels,kernel_size=3,stride=1,padding=1), nn.ReLU(),
             )
     def forward(self, x):
         return self.Network(x)
@@ -286,8 +278,10 @@ def reparameterize(mu, logvar):
     eps = torch.randn_like(std)
     return mu + eps*std
 
-# model = DSAE(dimx=32,dimz=10,num_sources=2,net_type='pooled')
-# x = model.sample(N=4,M=10)[0].sum(1) / 2
-# recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
-# print(x.size())
-# print(recon_x.size())
+#%%
+if __name__ == "__main__":
+    model = DSAE(dimx=257,dimz=128,num_sources=2,net_type='pooled')
+    x = model.sample(N=4,M=10)[0].sum(1) / 2
+    recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
+    print(x.size())
+    print(recon_x.size())

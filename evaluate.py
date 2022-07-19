@@ -16,7 +16,7 @@ from sklearn.manifold import  MDS
 import seaborn as sns
 
 
-parser = argparse.ArgumentParser(description='VAE TF Example')
+parser = argparse.ArgumentParser(description='DSAE Example')
 parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                     help='input batch size for training (default: 128)')
 parser.add_argument('--epochs', type=int, default=10, metavar='N',

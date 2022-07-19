@@ -16,7 +16,7 @@ import numpy as np
 
 # Try softplus, var not logvar
 
-parser = argparse.ArgumentParser(description='VAE TF Example')
+parser = argparse.ArgumentParser(description='DSAE Example')
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
 parser.add_argument('--epochs', type=int, default=10, metavar='N',
@@ -140,13 +140,12 @@ args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if args.cuda else "cpu")
 kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if args.cuda else {}
 
-args.dataset = 'MUMS'
 if args.dataset == 'MNIST':
     dim_data = (32,64)
     # args.data_directory = '/Users/julian/Documents/Code/Compute_Canada/data'
     transform = transforms.Compose([transforms.CenterCrop(size=dim_data),transforms.RandomAffine(degrees=0,translate=(0.25,0.0)),transforms.ToTensor()])
-    train_set = datasets.MNIST(args.data_directory, train=True, transform=transform)
-    test_set = datasets.MNIST(args.data_directory, train=False, transform=transform)
+    train_set = datasets.MNIST(args.data_directory, train=True, transform=transform, download=True)
+    test_set = datasets.MNIST(args.data_directory, train=False, transform=transform, download=True)
 if args.dataset == 'MUMS':
     dim_data = (128,256)
     args.data_directory = '/Volumes/Julian SSD/data/MUMS'
