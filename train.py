@@ -1,10 +1,7 @@
 import torch
 from torch import nn, optim
 from torch.nn import functional as F
-import math
-import torchaudio
 import os
-import matplotlib.pyplot as plt
 import argparse
 from torchvision import datasets, transforms
 from model import *
@@ -13,8 +10,6 @@ from torchvision.utils import make_grid, save_image
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 
-
-# Try softplus, var not logvar
 
 parser = argparse.ArgumentParser(description='DSAE Example')
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
@@ -64,13 +59,15 @@ def save_result(x,x_hat,s_hat,filename='result.png',epoch=1):
     for k in range(args.num_sources):
         togrid[2+k::nrows] = s_hat[:m,k].detach().unsqueeze(1)
     grid = make_grid(togrid.detach(),nrow=nrows).cpu()
-    save_image(grid,filename)
+    # save_image(grid,filename)
     writer.add_image('Results', grid, epoch)
+
 def save_sample(N=10,filename='result.png',epoch=1):
     sample = model.sample(M=4,N=N,device=device)[0][0].unsqueeze(1)
     grid = make_grid(sample.detach(),nrow=1).cpu()
-    save_image(grid,filename)
+    # save_image(grid,filename)
     writer.add_image('Samples', grid, epoch)
+
 def save_info(info,category='Train',epoch=1):
     writer.add_scalar(str(category)+'/Loss',info['loss'],epoch)
     writer.add_scalar(str(category)+'/ELL',info['ell'], epoch)
@@ -146,16 +143,19 @@ if args.dataset == 'MNIST':
     transform = transforms.Compose([transforms.CenterCrop(size=dim_data),transforms.RandomAffine(degrees=0,translate=(0.25,0.0)),transforms.ToTensor()])
     train_set = datasets.MNIST(args.data_directory, train=True, transform=transform, download=True)
     test_set = datasets.MNIST(args.data_directory, train=False, transform=transform, download=True)
+
 if args.dataset == 'MUMS':
     dim_data = (128,256)
     args.data_directory = '/Volumes/Julian SSD/data/MUMS'
     train_set = MUMS(args.data_directory,train=True,duration=dim_data[1], bins=dim_data[0],magnitude=False)
     test_set = MUMS(args.data_directory, train=False, duration=dim_data[1], bins=dim_data[0],magnitude=False)
+
 if args.dataset == 'Audio':
     dim_data = (128,64)
     # args.data_directory = '/Users/julian/Documents/Code/data/nsynth'
     train_set = Audioset(args.data_directory, spectrogram=True, duration=dim_data[1], bins=dim_data[0])
     test_set = Audioset(args.data_directory, spectrogram=True, duration=dim_data[1], bins=dim_data[0])
+    
 train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True, **kwargs)
 test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=True, **kwargs)
 path_results = os.path.join('results',args.dataset)
@@ -172,7 +172,18 @@ lr = 2e-4
 
 model_name = ('{}/model_{}_K{}_L{}_{}.pt').format(path_saves,args.dataset,str(args.num_sources),str(args.num_layers),args.net_type)
 
-model = DSAE(dimx=dimx,dimz=dimz,dimh=dimh,dimg=dimg,num_sources=args.num_sources,net_type=args.net_type,num_layers=args.num_layers).to(device)
+model = DSAE(
+    dimx=dimx,
+    dimz=dimz,
+    dimh=dimh,
+    dimg=dimg,
+    num_sources=args.num_sources,
+    net_type=args.net_type,
+    num_layers=args.num_layers
+    ).to(device)
+
+print(device)
+
 optimizer = optim.Adam(params=model.parameters(),lr=lr)
     
 for epoch in range(1,args.epochs+1):

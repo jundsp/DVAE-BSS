@@ -1,17 +1,16 @@
--f /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/avx2
--f /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic
-certifi==2020.4.5.1
+certifi
 chardet==3.0.4
 idna==2.8
-numpy==1.17.4
+numpy
 Pillow==6.2.1
 requests==2.22.0
 six==1.13.0
-torch==1.6.0
-torchaudio==0.6.0
-torchvision==0.6.0
-tensorboard
 tqdm==4.40.2
 urllib3==1.25.7
-matplotlib==2.2.3
-future==0.17.1
+matplotlib
+future
+torch
+torchvision
+torchaudio
+tensorboard
+soundfile

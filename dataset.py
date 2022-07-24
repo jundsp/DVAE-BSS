@@ -2,9 +2,8 @@ import torch
 from torch.utils.data import Dataset
 import numpy as np
 import os
-import scipy.io.wavfile
 from torch import nn, optim
-import torchaudio
+import soundfile as sf
 
 def round_pow2(x):
     return int(np.power(2,np.ceil(np.log2(x))))
@@ -51,7 +50,7 @@ class Audioset(Dataset):
     def __getitem__(self, n):
         path, descr = self._walker[n]
 
-        waveform, samplerate = torchaudio.load(path)
+        waveform, samplerate = sf.load(path)
         
         if self.spectrogram is True:
             n_fft = round_pow2(samplerate*.025)
