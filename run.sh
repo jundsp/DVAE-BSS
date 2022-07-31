@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --account=def-depalle
 #SBATCH --nodes=1  
-#SBATCH --gres=gpu:1  # Request GPU "generic resources"
-#SBATCH --cpus-per-task=8  # Cores proportional to GPUs: 6 on Cedar, 10 on Béluga, 16 on Graham.
+#SBATCH --gres=gpu:v100:1  # Request GPU "generic resources"
+#SBATCH --cpus-per-task=16  # Cores proportional to GPUs: 6 on Cedar, 10 on Béluga, 16 on Graham.
 #SBATCH --mem=32000M       # Memory proportional to GPUs: 32000 Cedar, 47000 Béluga, 64000 Graham.
-#SBATCH --time=00-08:00:00  # DD-HH:MM:SS
+#SBATCH --time=02-00:00:00  # DD-HH:MM:SS
 
 module load python/3.8
 module load scipy-stack
@@ -26,12 +26,14 @@ echo "Loading tensorboard and running Python script"
 tensorboard --logdir=$SOURCEDIR/runs --host 0.0.0.0 &
 python $SOURCEDIR/train.py \
 --epochs 10000 \
---batch-size 256 \
+--batch-size 1024 \
 --num-workers 16 \
 --kernel-size 16 \
 --overlap 2 \
 --mix-data True \
 --num-sources 2 \
+--latent-dim 256 \
+--rnn-dim 1024 \
 --dataset MNIST \
 --net-type pooled \
 --num-layers 2 \

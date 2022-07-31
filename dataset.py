@@ -4,6 +4,7 @@ import numpy as np
 import os
 from torch import nn, optim
 import soundfile as sf
+import torchaudio
 
 def round_pow2(x):
     return int(np.power(2,np.ceil(np.log2(x))))
@@ -57,8 +58,6 @@ class Audioset(Dataset):
             data = self.process_spectrogram(waveform,n_fft)
         else:
             data = self.process_audio(waveform)
-            
-        
 
         return data, samplerate
 
@@ -113,3 +112,42 @@ class MUMS(Dataset):
 
     def __len__(self):
         return self.n_files
+    
+    
+class WHAMR(Dataset):
+    def __init__(self,root,duration=None,normalize=True,bins=None,magnitude=False,set='train'):
+        
+        sets = {'train': 'tr',
+                'validate': 'cv',
+                'test': 'tt'}
+        self._path = os.path.join(root,'whamr/wav16k/min/'+sets[set])
+        self.duration = duration
+        self.normalize = normalize
+        self.bins = bins
+        self.magnitude = magnitude
+        suffix = '.wav'
+        
+        path_input = os.path.join(self._path,"mix_clean_anechoic")
+
+        walker = walk_files(path_input, suffix=suffix, prefix=True)
+        self._walker = list(walker)
+        self.n_files = len(self._walker)
+
+    def __getitem__(self, n):
+        path, filename = self._walker[n]
+
+        x,fs = torchaudio.load(path)
+
+        return x
+
+    def __len__(self):
+        return self.n_files
+    
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    dataset = WHAMR(root='/home/jneri/scratch/data/')
+    x = dataset.__getitem__(0)
+    
+    print(x.shape)
+    
+    

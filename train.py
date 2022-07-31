@@ -2,46 +2,15 @@ import torch
 from torch import nn, optim
 from torch.nn import functional as F
 import os
-import argparse
 from torchvision import datasets, transforms
 from model import *
 from dataset import *
 from torchvision.utils import make_grid, save_image
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
-
-
-parser = argparse.ArgumentParser(description='DSAE Example')
-parser.add_argument('--batch-size', type=int, default=128, metavar='N',
-                    help='input batch size for training (default: 128)')
-parser.add_argument('--epochs', type=int, default=10, metavar='N',
-                    help='number of epochs to train (default: 10)')
-parser.add_argument('--save-interval', type=int, default=1, metavar='N',
-                    help='number of epochs to train (default: 10)')
-parser.add_argument('--num-workers', type=int, default=4, metavar='N',
-                    help='number of epochs to train (default: 10)')
-parser.add_argument('--log-interval', type=int, default=10, metavar='N',
-                    help='number of epochs to train (default: 10)')
-parser.add_argument('--no-cuda', action='store_true', default=False,
-                    help='enables CUDA training')
-parser.add_argument('--mix-data', type=str, default=False,
-                    help='enables CUDA training')
-parser.add_argument('--seed', type=int, default=1, metavar='S',
-                    help='random seed (default: 1)')
-parser.add_argument('--dataset', type=str, default='MNIST', metavar='fname',
-                    help='name of the dataset')
-parser.add_argument('--kernel-size', type=int, default=8, metavar='fname',
-                    help='size of sliding kernel (in time)')
-parser.add_argument('--overlap', type=int, default=2, metavar='fname',
-                    help='size of sliding kernel (in time)')
-parser.add_argument('--num-sources', type=int, default=2, metavar='fname',
-                    help='number of sources in the model')
-parser.add_argument('--data-directory', type=str, default='/Users/julian/Documents/Code/Compute_Canada/data', metavar='fname',
-                    help='Folder containing the spectrogram data')
-parser.add_argument('--net-type', type=str, default='pooled', metavar='fname',
-                    help='name of the dataset')
-parser.add_argument('--num-layers', type=int, default=2, metavar='fname',
-                    help='number of sources in the model')
+from argparser import parser
+import socket
+from datetime import datetime
 
 def dict_average(input):
     avg = {}
@@ -74,9 +43,11 @@ def save_info(info,category='Train',epoch=1):
     writer.add_scalar(str(category)+'/KLD',info['kld'], epoch)
 
 def process_data(data):
+    perms = torch.randperm(data.size(0))
+    data = torch.cat([data,data[perms]],-1)
     if args.mix_data == 'True':
-        n = data.size(0)//2
-        data = 0.5*(data[:n] + data[n:n*2])
+        perms = torch.randperm(data.size(0))
+        data = 0.5*(data + data[perms])
     return data.squeeze(1)
 
 def train(epoch):
@@ -131,64 +102,75 @@ def test(epoch):
         save_info(info,category='Test',epoch=epoch)
     return info
 
-args = parser.parse_args()
-torch.manual_seed(args.seed)
-args.cuda = not args.no_cuda and torch.cuda.is_available()
-device = torch.device("cuda" if args.cuda else "cpu")
-kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if args.cuda else {}
 
-if args.dataset == 'MNIST':
-    dim_data = (32,64)
-    # args.data_directory = '/Users/julian/Documents/Code/Compute_Canada/data'
-    transform = transforms.Compose([transforms.CenterCrop(size=dim_data),transforms.RandomAffine(degrees=0,translate=(0.25,0.0)),transforms.ToTensor()])
-    train_set = datasets.MNIST(args.data_directory, train=True, transform=transform, download=True)
-    test_set = datasets.MNIST(args.data_directory, train=False, transform=transform, download=True)
+if __name__ == "__main__":
+    args = parser.parse_args()
+    torch.manual_seed(args.seed)
+    args.cuda = not args.no_cuda and torch.cuda.is_available()
+    device = torch.device("cuda" if args.cuda else "cpu")
+    kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if args.cuda else {}
+    print(device)
 
-if args.dataset == 'MUMS':
-    dim_data = (128,256)
-    args.data_directory = '/Volumes/Julian SSD/data/MUMS'
-    train_set = MUMS(args.data_directory,train=True,duration=dim_data[1], bins=dim_data[0],magnitude=False)
-    test_set = MUMS(args.data_directory, train=False, duration=dim_data[1], bins=dim_data[0],magnitude=False)
+    if args.dataset == 'MNIST':
+        dim_data = (32,32)
+        # args.data_directory = '/Users/julian/Documents/Code/Compute_Canada/data'
+        transform = transforms.Compose([transforms.CenterCrop(size=dim_data),transforms.RandomAffine(degrees=0,translate=(0.25,0.0)),transforms.ToTensor()])
+        train_set = datasets.MNIST(args.data_directory, train=True, transform=transform, download=True)
+        test_set = datasets.MNIST(args.data_directory, train=False, transform=transform, download=True)
 
-if args.dataset == 'Audio':
-    dim_data = (128,64)
-    # args.data_directory = '/Users/julian/Documents/Code/data/nsynth'
-    train_set = Audioset(args.data_directory, spectrogram=True, duration=dim_data[1], bins=dim_data[0])
-    test_set = Audioset(args.data_directory, spectrogram=True, duration=dim_data[1], bins=dim_data[0])
+    if args.dataset == 'MUMS':
+        dim_data = (128,256)
+        # args.data_directory = '/Volumes/Julian SSD/data/MUMS'
+        train_set = MUMS(args.data_directory,train=True,duration=dim_data[1], bins=dim_data[0],magnitude=False)
+        test_set = MUMS(args.data_directory, train=False, duration=dim_data[1], bins=dim_data[0],magnitude=False)
+
+    if args.dataset == 'Audio':
+        dim_data = (128,256)
+        # args.data_directory = '/Users/julian/Documents/Code/data/nsynth'
+        train_set = Audioset(args.data_directory, spectrogram=True, duration=dim_data[1], bins=dim_data[0])
+        test_set = Audioset(args.data_directory, spectrogram=True, duration=dim_data[1], bins=dim_data[0])
+        
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True, **kwargs)
+    test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=True, **kwargs)
+
+    root = os.path.join(args.output_directory,'SVAE')
     
-train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True, **kwargs)
-test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=True, **kwargs)
-path_results = os.path.join('results',args.dataset)
-path_saves = os.path.join('saves',args.dataset)
-os.makedirs(path_results,exist_ok=True)
-os.makedirs(path_saves,exist_ok=True)
-writer = SummaryWriter(comment='ConvSVAE_' + str(args.dataset))
+    current_time = datetime.now().strftime('%y%m%d_%H-%M-%S')
+    sub_dir = os.path.join(args.dataset,current_time+ '_' + socket.gethostname())
 
-dimx = dim_data[0]
-dimz = 64
-dimh = 256
-dimg = 256
-lr = 2e-4
+    path_results = os.path.join(root,'results',sub_dir)
+    path_saves = os.path.join(root,'saves',sub_dir)
+    path_runs = os.path.join(root,'runs',sub_dir)
 
-model_name = ('{}/model_{}_K{}_L{}_{}.pt').format(path_saves,args.dataset,str(args.num_sources),str(args.num_layers),args.net_type)
+    os.makedirs(path_results,exist_ok=True)
+    os.makedirs(path_saves,exist_ok=True)
+    os.makedirs(path_runs,exist_ok=True)
 
-model = DSAE(
-    dimx=dimx,
-    dimz=dimz,
-    dimh=dimh,
-    dimg=dimg,
-    num_sources=args.num_sources,
-    net_type=args.net_type,
-    num_layers=args.num_layers
-    ).to(device)
+    writer = SummaryWriter(log_dir=path_runs,comment='SVAE_' + str(args.dataset))
 
-print(device)
+    dimx = dim_data[0]
+    dimz = args.latent_dim
+    dimh = args.rnn_dim
+    dimg = args.rnn_dim
+    lr = 2e-4
 
-optimizer = optim.Adam(params=model.parameters(),lr=lr)
-    
-for epoch in range(1,args.epochs+1):
-    train_info = train(epoch)
-    test_info = test(epoch)
+    model_name = ('{}/svae_{}_K{}_L{}_{}_D{}.pt').format(path_saves,args.dataset,str(args.num_sources),str(args.num_layers),args.net_type,args.latent_dim)
 
-    if epoch % args.save_interval == 0:
-        torch.save(model.state_dict(),model_name)
+    model = DSAE(
+        dimx=dimx,
+        dimz=dimz,
+        dimh=dimh,
+        dimg=dimg,
+        num_sources=args.num_sources,
+        net_type=args.net_type,
+        num_layers=args.num_layers,
+        ).to(device)
+
+    optimizer = optim.Adam(params=model.parameters(),lr=lr)
+        
+    for epoch in range(1,args.epochs+1):
+        train_info = train(epoch)
+        test_info = test(epoch)
+
+        if epoch % args.save_interval == 0:
+            torch.save(model.state_dict(),model_name)

@@ -285,3 +285,4 @@ if __name__ == "__main__":
     recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
     print(x.size())
     print(recon_x.size())
+    print(model)
