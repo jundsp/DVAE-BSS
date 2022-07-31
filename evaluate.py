@@ -178,8 +178,8 @@ plt.show()
 fig, ax = plt.subplots(8,args.num_sources,sharex=True, sharey=True)
 for i in range(8):
     for j in range(args.num_sources):
-    	ax[i,j].imshow(sample[i,j],vmin=0,vmax=1,cmap=mycmp),
-    	ax[i,j].get_yaxis().set_visible(False)
+        ax[i,j].imshow(sample[i,j],vmin=0,vmax=1,cmap=mycmp)
+        ax[i,j].get_yaxis().set_visible(False)
 for i in range(args.num_sources):
     ax[0,i].set_title('Sampled $s_'+str(i+1)+'$')
 plt.savefig('results/'+str(args.dataset)+'/samples_K'+str(args.num_sources)+'.pdf')
