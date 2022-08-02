@@ -115,16 +115,13 @@ class MUMS(Dataset):
     
     
 class WHAMR(Dataset):
-    def __init__(self,root,duration=None,normalize=True,bins=None,magnitude=False,set='train'):
+    def __init__(self,root,duration=None,set='train'):
         
         sets = {'train': 'tr',
                 'validate': 'cv',
                 'test': 'tt'}
         self._path = os.path.join(root,'whamr/wav16k/min/'+sets[set])
         self.duration = duration
-        self.normalize = normalize
-        self.bins = bins
-        self.magnitude = magnitude
         suffix = '.wav'
         
         path_input = os.path.join(self._path,"mix_clean_anechoic")
@@ -137,6 +134,10 @@ class WHAMR(Dataset):
         path, filename = self._walker[n]
 
         x,fs = torchaudio.load(path)
+
+        if self.duration is not None:
+            samples = int(self.duration * fs)
+            x = x[:,:samples]
 
         return x
 
