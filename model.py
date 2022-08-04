@@ -1,7 +1,10 @@
 #%%
+from turtle import forward
 import torch
 from torch import nn
 import math
+from utils.stft import STFT, iSTFT
+import numpy as np
 
 class DSAE(nn.Module):
     def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1):
@@ -174,8 +177,8 @@ class StridedEncoder(nn.Module):
     def __init__(self,input_channels,output_channels):
         super(StridedEncoder, self).__init__()
         self.Network = nn.Sequential(
-            nn.Conv1d(input_channels,128,kernel_size=4,stride=2,padding=1), nn.ReLU(), nn.BatchNorm1d(128),
-            nn.Conv1d(128,256,kernel_size=4,stride=2,padding=1), nn.ReLU(), nn.BatchNorm1d(256),
+            nn.Conv1d(input_channels,128,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(128),
+            nn.Conv1d(128,256,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(256),
             nn.Conv1d(256,output_channels,kernel_size=3,stride=1,padding=1), nn.ReLU(),
             )
     def forward(self, x):
@@ -185,9 +188,9 @@ class StridedDecoder(nn.Module):
     def __init__(self,input_channels,output_channels):
         super(StridedDecoder, self).__init__()
         self.Network = nn.Sequential(
-            nn.ConvTranspose1d(input_channels,256,kernel_size=4,stride=2,padding=1), nn.ReLU(), nn.BatchNorm1d(256),
-            nn.ConvTranspose1d(256,128,kernel_size=4,stride=2,padding=1), nn.ReLU(), nn.BatchNorm1d(128),
-            nn.ConvTranspose1d(128,output_channels,kernel_size=3,stride=1,padding=1), nn.Sigmoid(), 
+            nn.ConvTranspose1d(input_channels,256,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(256),
+            nn.ConvTranspose1d(256,128,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(128),
+            nn.ConvTranspose1d(128,output_channels,kernel_size=3,stride=1,padding=1), 
             )
     def forward(self, x):
         return self.Network(x)
@@ -278,11 +281,75 @@ def reparameterize(mu, logvar):
     eps = torch.randn_like(std)
     return mu + eps*std
 
+class DCVAE(DSAE):
+    def __init__(self, fs, nfft, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1):
+        dimx = nfft//2+1
+        super().__init__(dimx*2, dimz, dimh, dimg, chans, num_sources, net_type, num_layers)
+        self.stft = STFT(fs=fs,nfft=nfft,winlen=.032,hopfrac=.5)
+        self.istft = iSTFT(fs=fs,nfft=nfft,winlen=.032,hopfrac=.5)
+
+    def forward(self,x):
+        X = self.stft(x)
+        X_shape = X.shape
+        X = X.flatten(-2,-1).permute(0,2,1)
+        recon_X, recon_S, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = super().forward(X)
+        recon_X = recon_X.permute(0,2,1).view(*X_shape)
+        recon_x = self.istft(recon_X,self.stft.padder)
+        return recon_x,mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q
+
 #%%
-if __name__ == "__main__":
-    model = DSAE(dimx=257,dimz=128,num_sources=2,net_type='pooled')
-    x = model.sample(N=4,M=10)[0].sum(1) / 2
-    recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
-    print(x.size())
-    print(recon_x.size())
-    print(model)
+from torch import nn, optim
+
+model = DCVAE(fs=16e3,nfft=512,dimz=128,net_type='strided')
+
+
+#%%
+optimizer = optim.Adam(params=model.parameters(),lr=1e-3)
+
+lossfun = nn.MSELoss()
+
+model.train()
+
+#%%
+for batch in range(100):
+
+    optimizer.zero_grad()
+
+    x = torch.cos(2*np.pi*torch.arange(8000).view(1,-1)/16e3*torch.rand(32,1)*5e2 + torch.randn(32,1)*4)
+
+    y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
+
+    loss = lossfun(input=y,target=x)
+
+    ell, kld = model.loss_function(x,y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
+    loss = ell + kld
+
+    loss.backward()
+
+    optimizer.step()
+
+    if batch % 10 == 0:
+        print("loss {:4.2f} \t ell {:4.2f} \t kld {:4.2f}".format(loss.item(),ell.item(),kld.item()))
+
+# %%
+import matplotlib.pyplot as plt
+plt.plot(x[0])
+plt.plot(y[0].detach().numpy())
+plt.xlim(0,512)
+
+# %%
+
+x = torch.cos(2*np.pi*torch.arange(32000*2).view(1,-1)/16e3*torch.rand(32,1)*5e2 + torch.randn(32,1)*4)
+
+y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
+
+X = model.sample(N=503,M=4)[0][:,0].permute(0,2,1)
+X = X.view(X.shape[0],X.shape[1],X.shape[2]//2,2)
+x_sample = model.istft(X,model.stft.padder)
+X = torch.complex(X[:,:,:,0],X[:,:,:,1]).contiguous()
+plt.imshow(torch.abs(X[0]).log10().detach().numpy().T,aspect='auto',origin='lower')
+# %%
+import soundfile as sf
+x_sample /= x_sample.abs().max()*2
+sf.write("/Users/julian/Desktop/sampled_dcvae.wav",x_sample[0].detach().numpy(),16000)
+# %%

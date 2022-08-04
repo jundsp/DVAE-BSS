@@ -105,11 +105,11 @@ class iSTFT(torch.nn.Module):
         win = biorwin(win, self.hopsize)
         self.register_buffer('win', torch.from_numpy(win).float())
 
-    def forward(self, X, padder):
+    def forward(self, Y, padder):
         """X: [batch x frames x freq x 2] """
-        if len(X.shape) > 3:
+        if len(Y.shape) > 3:
             # complex input as channels
-            Y = torch.complex(X[:,:,:,0], X[:,:,:,1]).contiguous()
+            Y = torch.complex(Y[:,:,:,0], Y[:,:,:,1]).contiguous()
         
         ypad_slices = torch.fft.irfft(Y,n=self.nfft)[:,:,:self.winlen] * self.win.view(1,1,-1)
 
