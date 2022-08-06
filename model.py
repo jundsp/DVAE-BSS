@@ -281,6 +281,10 @@ def reparameterize(mu, logvar):
     eps = torch.randn_like(std)
     return mu + eps*std
 
+def output_size(H_in, kernel_size, stride=1,  dilation=1, padding=0):
+    H_out = H_in + 2*padding - dilation * (kernel_size - 1) - 1
+    return H_out // stride + 1
+
 class DCVAE(DSAE):
     def __init__(self, fs, nfft, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1):
         dimx = nfft//2+1
