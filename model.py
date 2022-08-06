@@ -1,5 +1,4 @@
 #%%
-from turtle import forward
 import torch
 from torch import nn
 import math
@@ -58,8 +57,8 @@ class DSAE(nn.Module):
             self.Encoder = PooledEncoder(dimx,dimg*num_sources)
             self.Decoder = PooledDecoder(dimz,dimx)
         else: 
-            self.Encoder = StridedEncoder(dimx,dimg*num_sources)
-            self.Decoder = StridedDecoder(dimz,dimx)
+            self.Encoder = StridedEncoder(dimx,64)
+            self.Decoder = StridedDecoder(64,dimx)
 
         self.likelihood = NormalLikelihood()
         self.criteria = nn.BCELoss(reduction='sum')
@@ -88,8 +87,10 @@ class DSAE(nn.Module):
         logvar0 = self.logvar0_q(g[:,0].unsqueeze(1))
         return mu, logvar, mu0, logvar0
 
-    def decode(self,z):
-        x = self.Decoder(z.transpose(-2,-1))
+    def decode(self,z):        
+        z = z.transpose(-2,-1)
+        z = z.view(-1,64,self.dimz//64,z.shape[-1])
+        x = self.Decoder(z)
         return x
  
     def combiner(self,z,h):
@@ -162,8 +163,8 @@ class DSAE(nn.Module):
         z0 = reparameterize(mu0_q,logvar0_q)
         mu_p, logvar_p = self.prior(z,z0)
         mu_s = self.decode(z)
-        recon_s = mu_s.view(-1,self.num_sources,mu_s.size(-2),mu_s.size(-1))
-        recon_x = recon_s.sum(1)
+        recon_s = mu_s
+        recon_x = recon_s
         return recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q
 
 
@@ -174,23 +175,27 @@ Encoder/Decoders for Features.
 '''
 
 class StridedEncoder(nn.Module):
-    def __init__(self,input_channels,output_channels):
+    def __init__(self,input_channels,output_channels,kernel_size=(3,2),stride=(2,1),padding=(1,0)):
         super(StridedEncoder, self).__init__()
         self.Network = nn.Sequential(
-            nn.Conv1d(input_channels,128,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(128),
-            nn.Conv1d(128,256,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(256),
-            nn.Conv1d(256,output_channels,kernel_size=3,stride=1,padding=1), nn.ReLU(),
+            nn.Conv2d(input_channels,32,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(), nn.BatchNorm2d(32),
+            nn.Conv2d(32,64,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(), nn.BatchNorm2d(64),
+            nn.Conv2d(64,64,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(), nn.BatchNorm2d(64),
+            nn.Conv2d(64,64,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(), nn.BatchNorm2d(64),
+            nn.Conv2d(64,output_channels,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(),
             )
     def forward(self, x):
         return self.Network(x)
 
 class StridedDecoder(nn.Module):
-    def __init__(self,input_channels,output_channels):
+    def __init__(self,input_channels,output_channels,kernel_size=(3,2),stride=(2,1),padding=(1,0)):
         super(StridedDecoder, self).__init__()
         self.Network = nn.Sequential(
-            nn.ConvTranspose1d(input_channels,256,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(256),
-            nn.ConvTranspose1d(256,128,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(128),
-            nn.ConvTranspose1d(128,output_channels,kernel_size=3,stride=1,padding=1), 
+            nn.ConvTranspose2d(input_channels,64,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(), nn.BatchNorm2d(64),
+            nn.ConvTranspose2d(64,64,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(), nn.BatchNorm2d(64),
+            nn.ConvTranspose2d(64,64,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(), nn.BatchNorm2d(64),
+            nn.ConvTranspose2d(64,32,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(), nn.BatchNorm2d(32),
+            nn.ConvTranspose2d(32,output_channels,kernel_size=kernel_size,stride=stride,padding=padding), 
             )
     def forward(self, x):
         return self.Network(x)
@@ -288,24 +293,30 @@ def output_size(H_in, kernel_size, stride=1,  dilation=1, padding=0):
 class DCVAE(DSAE):
     def __init__(self, fs, nfft, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1):
         dimx = nfft//2+1
-        super().__init__(dimx*2, dimz, dimh, dimg, chans, num_sources, net_type, num_layers)
-        self.stft = STFT(fs=fs,nfft=nfft,winlen=.032,hopfrac=.5)
-        self.istft = iSTFT(fs=fs,nfft=nfft,winlen=.032,hopfrac=.5)
+        H_in = dimx
+        for i in range(5):
+            H_in = output_size(H_in,kernel_size=3,stride=2,padding=1)
+        dimg = 64*H_in
+        dimz = dimg 
+        super().__init__(2, dimz, dimh, dimg, chans, num_sources, net_type, num_layers)
+        self.stft = STFT(fs=fs,nfft=nfft,winlen=.02,hopfrac=.5)
+        self.istft = iSTFT(fs=fs,nfft=nfft,winlen=.02,hopfrac=.5)
 
     def forward(self,x):
         X = self.stft(x)
-        X_shape = X.shape
-        X = X.flatten(-2,-1).permute(0,2,1)
+        X = X.transpose(1,-1)
         recon_X, recon_S, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = super().forward(X)
-        recon_X = recon_X.permute(0,2,1).view(*X_shape)
+        recon_X = recon_X.transpose(1,-1)
         recon_x = self.istft(recon_X,self.stft.padder)
         return recon_x,mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q
+
+# %%
 
 #%%
 from torch import nn, optim
 
-model = DCVAE(fs=16e3,nfft=512,dimz=128,net_type='strided')
-
+model = DCVAE(fs=16e3,nfft=320,dimz=64,net_type='strided')
+print(model.dimg)
 
 #%%
 optimizer = optim.Adam(params=model.parameters(),lr=1e-3)
@@ -315,11 +326,11 @@ lossfun = nn.MSELoss()
 model.train()
 
 #%%
-for batch in range(100):
+for batch in range(1000):
 
     optimizer.zero_grad()
 
-    x = torch.cos(2*np.pi*torch.arange(8000).view(1,-1)/16e3*torch.rand(32,1)*5e2 + torch.randn(32,1)*4)
+    x = torch.cos(2*np.pi*torch.arange(8e3).view(1,-1)/16e3*torch.rand(16,1)*5e2 + torch.randn(16,1)*4)
 
     y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
 
@@ -340,20 +351,3 @@ import matplotlib.pyplot as plt
 plt.plot(x[0])
 plt.plot(y[0].detach().numpy())
 plt.xlim(0,512)
-
-# %%
-
-x = torch.cos(2*np.pi*torch.arange(32000*2).view(1,-1)/16e3*torch.rand(32,1)*5e2 + torch.randn(32,1)*4)
-
-y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
-
-X = model.sample(N=503,M=4)[0][:,0].permute(0,2,1)
-X = X.view(X.shape[0],X.shape[1],X.shape[2]//2,2)
-x_sample = model.istft(X,model.stft.padder)
-X = torch.complex(X[:,:,:,0],X[:,:,:,1]).contiguous()
-plt.imshow(torch.abs(X[0]).log10().detach().numpy().T,aspect='auto',origin='lower')
-# %%
-import soundfile as sf
-x_sample /= x_sample.abs().max()*2
-sf.write("/Users/julian/Desktop/sampled_dcvae.wav",x_sample[0].detach().numpy(),16000)
-# %%
