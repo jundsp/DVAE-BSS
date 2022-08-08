@@ -212,7 +212,7 @@ class StridedDecoder(nn.Module):
 class PooledEncoder(nn.Module):
     def __init__(self,input_channels,output_channels):
         super(PooledEncoder, self).__init__()
-        pooling = nn.MaxPool1d(kernel_size=2,stride=2,padding=1)
+        pooling = nn.MaxPool1d(kernel_size=2,stride=2,padding=0)
         self.Network = nn.Sequential(
             nn.Conv1d(input_channels,64,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(64),
             nn.Conv1d(64,128,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(128),
@@ -225,7 +225,6 @@ class PooledDecoder(nn.Module):
     def __init__(self,input_channels,output_channels):
         super(PooledDecoder, self).__init__()
         upsample = nn.Upsample(scale_factor=2,mode='linear',align_corners=False)
-        kwds = dict(kernel_size=3,stride=1,padding=1)
         self.Network = nn.Sequential(
             nn.ConvTranspose1d(input_channels,128,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(128), upsample,
             nn.ConvTranspose1d(128,64,kernel_size=3,stride=1,padding=1), nn.ReLU(), upsample,
@@ -291,6 +290,7 @@ def output_size(H_in, kernel_size, stride=1,  dilation=1, padding=0):
     H_out = H_in + 2*padding - dilation * (kernel_size - 1) - 1
     return H_out // stride + 1
 
+
 class DCVAE(DSAE):
     def __init__(self, fs, nfft, chans=64, num_sources=1, net_type='pooled', num_layers=1):
         dimx = nfft//2+1
@@ -320,11 +320,19 @@ class DCVAE(DSAE):
         else:
             X = X.transpose(1,-1)
             
-        print(X.shape)
-        
+        k = X.shape[-1]
+        dsfac = 2**2
+        pad_ = k % dsfac
+        if pad_ > 0:
+            pad_ = dsfac - pad_
+
+        X = torch.cat([X,torch.zeros(X.shape[0],X.shape[1],pad_)],-1)
+            
         recon_X, recon_S, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = super().forward(X)
-        
-        print(recon_X.shape)
+
+        if pad_ > 0:
+            recon_X = recon_X[:,:,:-pad_]
+            recon_S = recon_S[:,:,:-pad_]
         
         if self.net_type == 'pooled':
             recon_X = recon_X.transpose(-2,-1)
@@ -332,8 +340,6 @@ class DCVAE(DSAE):
         else:
             recon_X = recon_X.transpose(1,-1)
             
-        print(recon_X.shape)
-        
         recon_x = self.istft(recon_X,self.stft.padder)
         return recon_x,mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q
 
@@ -360,10 +366,12 @@ lossfun = FreqSignalLoss(device=device)
 
 model.train()
 
-dataset = WHAMR(root='/home/jneri/scratch/data/',duration=3,set='test')
-train_loader = torch.utils.data.DataLoader(dataset,batch_size=64,shuffle=True,num_workers=8,pin_memory=True)
+# dataset = WHAMR(root='/home/jneri/scratch/data/',duration=3,set='test')
+# train_loader = torch.utils.data.DataLoader(dataset,batch_size=64,shuffle=True,num_workers=8,pin_memory=True)
 
-x = next(iter(train_loader))
+# x = next(iter(train_loader))
+
+x = torch.randn(3,16000)
 x = x.to(device)
 
 y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
