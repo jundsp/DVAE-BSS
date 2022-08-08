@@ -1,9 +1,9 @@
+#%%
 import torch
 from torch.utils.data import Dataset
 import numpy as np
 import os
-from torch import nn, optim
-import soundfile as sf
+from torch import nn
 import torchaudio
 
 def round_pow2(x):
@@ -124,7 +124,7 @@ class WHAMR(Dataset):
         self.duration = duration
         suffix = '.wav'
         
-        path_input = os.path.join(self._path,"mix_clean_anechoic")
+        path_input = os.path.join(self._path,"s1_anechoic")
 
         walker = walk_files(path_input, suffix=suffix, prefix=True)
         self._walker = list(walker)
@@ -136,19 +136,28 @@ class WHAMR(Dataset):
         x,fs = torchaudio.load(path)
 
         if self.duration is not None:
+            L = x.shape[-1]
             samples = int(self.duration * fs)
+            if samples > L:
+                x = torch.cat([x,torch.zeros((1,samples-L))],-1)
             x = x[:,:samples]
 
-        return x
+        return x[0]
 
     def __len__(self):
         return self.n_files
-    
+
+#%%
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    dataset = WHAMR(root='/home/jneri/scratch/data/')
-    x = dataset.__getitem__(0)
     
-    print(x.shape)
+    dataset = WHAMR(root='/home/jneri/scratch/data/',duration=4)
+    dataloader = torch.utils.data.DataLoader(dataset,batch_size=16,shuffle=True)
+    x = next(iter(dataloader))
+        
+    X = torch.stft(x[0],n_fft=512,return_complex=True,window=torch.hann_window(512))    
+    plt.imshow(X.abs().log10(),aspect='auto',origin='lower',cmap='jet')
     
     
+
+# %%

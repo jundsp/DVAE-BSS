@@ -2,6 +2,7 @@ certifi
 chardet==3.0.4
 idna==2.8
 numpy
+scipy
 Pillow==6.2.1
 requests==2.22.0
 six==1.13.0
@@ -14,4 +15,4 @@ torchvision
 torchaudio
 tensorboard
 soundfile
-samplerate
+# samplerate

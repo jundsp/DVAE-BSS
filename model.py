@@ -4,6 +4,7 @@ from torch import nn
 import math
 from utils.stft import STFT, iSTFT
 import numpy as np
+from lossfun import FreqSignalLoss
 
 class DSAE(nn.Module):
     def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1):
@@ -11,6 +12,8 @@ class DSAE(nn.Module):
         self.dimx, self.dimz, self.dimh, self.dimg = dimx, dimz, dimh, dimg
         self.num_sources = num_sources
         self.num_layers = num_layers
+        
+        self.dec_chan = 128
 
         self.gru_generate = nn.LSTM(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
         self.gru_infer = nn.LSTM(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
@@ -57,12 +60,12 @@ class DSAE(nn.Module):
             self.Encoder = PooledEncoder(dimx,dimg*num_sources)
             self.Decoder = PooledDecoder(dimz,dimx)
         else: 
-            self.Encoder = StridedEncoder(dimx,64)
-            self.Decoder = StridedDecoder(64,dimx)
+            self.Encoder = StridedEncoder(dimx,self.dec_chan)
+            self.Decoder = StridedDecoder(self.dec_chan,dimx)
 
         self.likelihood = NormalLikelihood()
         self.criteria = nn.BCELoss(reduction='sum')
-        self.register_buffer('variance',torch.tensor(0.1))
+        self.register_buffer('variance',torch.tensor(0.01))
         self.register_parameter('smu',nn.Parameter(torch.zeros(1,num_sources,self.dimz)))
         self.register_parameter('smu0',nn.Parameter(torch.zeros(1,num_sources,self.dimz)))
         self.register_buffer('slogvar',torch.zeros(1,num_sources,self.dimz))
@@ -89,7 +92,8 @@ class DSAE(nn.Module):
 
     def decode(self,z):        
         z = z.transpose(-2,-1)
-        z = z.view(-1,64,self.dimz//64,z.shape[-1])
+        if self.net_type == 'strided':
+            z = z.view(-1,self.dec_chan,self.dimz//self.dec_chan,z.shape[-1])
         x = self.Decoder(z)
         return x
  
@@ -124,8 +128,8 @@ class DSAE(nn.Module):
         zh = self.combiner(zt,h)
         mu,logvar = self.prior_stats(zh)
         return mu, logvar
-
-    def sample(self,N=10,M=1,device='cpu'):
+    
+    def sample_latent(self,N,M,device):
         MK = M * self.num_sources
         z = torch.zeros(MK,N,self.dimz,device=device)
         h = torch.zeros(MK,N,self.dimh,device=device)
@@ -141,6 +145,10 @@ class DSAE(nn.Module):
             z_t = reparameterize(mu,logvar)
             z[:,n] = z_t.squeeze(1)
             h[:,n] = h_t[-1]
+        return z, h
+
+    def sample(self,N=10,M=1,device='cpu'):
+        z, h = self.sample_latent(N=N,M=M,device=device)
         
         s = self.decode(z)
         s = s.view(-1,self.num_sources,s.size(-2),s.size(-1))
@@ -178,11 +186,11 @@ class StridedEncoder(nn.Module):
     def __init__(self,input_channels,output_channels,kernel_size=(3,2),stride=(2,1),padding=(1,0)):
         super(StridedEncoder, self).__init__()
         self.Network = nn.Sequential(
-            nn.Conv2d(input_channels,32,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(), nn.BatchNorm2d(32),
-            nn.Conv2d(32,64,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(), nn.BatchNorm2d(64),
-            nn.Conv2d(64,64,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(), nn.BatchNorm2d(64),
-            nn.Conv2d(64,64,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(), nn.BatchNorm2d(64),
-            nn.Conv2d(64,output_channels,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(),
+            nn.Conv2d(input_channels,32,kernel_size=kernel_size,stride=stride,padding=padding), nn.LeakyReLU(), nn.BatchNorm2d(32),
+            nn.Conv2d(32,64,kernel_size=kernel_size,stride=stride,padding=padding), nn.LeakyReLU(), nn.BatchNorm2d(64),
+            nn.Conv2d(64,64,kernel_size=kernel_size,stride=stride,padding=padding), nn.LeakyReLU(), nn.BatchNorm2d(64),
+            nn.Conv2d(64,128,kernel_size=kernel_size,stride=stride,padding=padding), nn.LeakyReLU(), nn.BatchNorm2d(128),
+            nn.Conv2d(128,output_channels,kernel_size=kernel_size,stride=stride,padding=padding), nn.LeakyReLU(),
             )
     def forward(self, x):
         return self.Network(x)
@@ -191,10 +199,10 @@ class StridedDecoder(nn.Module):
     def __init__(self,input_channels,output_channels,kernel_size=(3,2),stride=(2,1),padding=(1,0)):
         super(StridedDecoder, self).__init__()
         self.Network = nn.Sequential(
-            nn.ConvTranspose2d(input_channels,64,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(), nn.BatchNorm2d(64),
-            nn.ConvTranspose2d(64,64,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(), nn.BatchNorm2d(64),
-            nn.ConvTranspose2d(64,64,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(), nn.BatchNorm2d(64),
-            nn.ConvTranspose2d(64,32,kernel_size=kernel_size,stride=stride,padding=padding), nn.ReLU(), nn.BatchNorm2d(32),
+            nn.ConvTranspose2d(input_channels,128,kernel_size=kernel_size,stride=stride,padding=padding), nn.LeakyReLU(), nn.BatchNorm2d(128),
+            nn.ConvTranspose2d(128,64,kernel_size=kernel_size,stride=stride,padding=padding), nn.LeakyReLU(), nn.BatchNorm2d(64),
+            nn.ConvTranspose2d(64,64,kernel_size=kernel_size,stride=stride,padding=padding), nn.LeakyReLU(), nn.BatchNorm2d(64),
+            nn.ConvTranspose2d(64,32,kernel_size=kernel_size,stride=stride,padding=padding), nn.LeakyReLU(), nn.BatchNorm2d(32),
             nn.ConvTranspose2d(32,output_channels,kernel_size=kernel_size,stride=stride,padding=padding), 
             )
     def forward(self, x):
@@ -204,15 +212,11 @@ class StridedDecoder(nn.Module):
 class PooledEncoder(nn.Module):
     def __init__(self,input_channels,output_channels):
         super(PooledEncoder, self).__init__()
-        pooling = nn.MaxPool1d(kernel_size=2,stride=2)
-        # pooling = SincInterpolation(scale_factor=.5)
+        pooling = nn.MaxPool1d(kernel_size=2,stride=2,padding=1)
         self.Network = nn.Sequential(
             nn.Conv1d(input_channels,64,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(64),
             nn.Conv1d(64,128,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(128),
-            nn.Conv1d(128,256,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(256),
-            nn.Conv1d(256,256,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(256),
-            nn.Conv1d(256,512,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(512),
-            nn.Conv1d(512,output_channels,kernel_size=3,stride=1,padding=1), nn.ReLU(),
+            nn.Conv1d(128,output_channels,kernel_size=3,stride=1,padding=1), nn.ReLU(),
             )
     def forward(self, x):
         return self.Network(x)
@@ -221,14 +225,11 @@ class PooledDecoder(nn.Module):
     def __init__(self,input_channels,output_channels):
         super(PooledDecoder, self).__init__()
         upsample = nn.Upsample(scale_factor=2,mode='linear',align_corners=False)
-        # upsample = SincInterpolation(scale_factor=2)
+        kwds = dict(kernel_size=3,stride=1,padding=1)
         self.Network = nn.Sequential(
-            nn.ConvTranspose1d(input_channels,512,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(512), upsample,
-            nn.ConvTranspose1d(512,256,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(256), upsample,
-            nn.ConvTranspose1d(256,256,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(256), upsample,
-            nn.ConvTranspose1d(256,128,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(128), upsample,
+            nn.ConvTranspose1d(input_channels,128,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(128), upsample,
             nn.ConvTranspose1d(128,64,kernel_size=3,stride=1,padding=1), nn.ReLU(), upsample,
-            nn.ConvTranspose1d(64,output_channels,kernel_size=3,stride=1,padding=1), nn.Sigmoid(),
+            nn.ConvTranspose1d(64,output_channels,kernel_size=3,stride=1,padding=1), 
             )
     def forward(self, x):
         return self.Network(x)
@@ -291,63 +292,125 @@ def output_size(H_in, kernel_size, stride=1,  dilation=1, padding=0):
     return H_out // stride + 1
 
 class DCVAE(DSAE):
-    def __init__(self, fs, nfft, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1):
+    def __init__(self, fs, nfft, chans=64, num_sources=1, net_type='pooled', num_layers=1):
         dimx = nfft//2+1
+        self.dimx = dimx * 2
+        if net_type == 'strided':
+            self.dimx = 2
+            
         H_in = dimx
         for i in range(5):
             H_in = output_size(H_in,kernel_size=3,stride=2,padding=1)
-        dimg = 64*H_in
+            
+        self.net_type = net_type
+            
+        dimg = 128
         dimz = dimg 
-        super().__init__(2, dimz, dimh, dimg, chans, num_sources, net_type, num_layers)
+        dimh = dimz
+        chans = dimh
+        super().__init__(self.dimx, dimz, dimh, dimg, chans, num_sources, self.net_type, num_layers)
         self.stft = STFT(fs=fs,nfft=nfft,winlen=.02,hopfrac=.5)
         self.istft = iSTFT(fs=fs,nfft=nfft,winlen=.02,hopfrac=.5)
 
     def forward(self,x):
         X = self.stft(x)
-        X = X.transpose(1,-1)
+        
+        if self.net_type == 'pooled':
+            X = X.view(X.shape[0], X.shape[1], -1).transpose(-2,-1)
+        else:
+            X = X.transpose(1,-1)
+            
+        print(X.shape)
+        
         recon_X, recon_S, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = super().forward(X)
-        recon_X = recon_X.transpose(1,-1)
+        
+        print(recon_X.shape)
+        
+        if self.net_type == 'pooled':
+            recon_X = recon_X.transpose(-2,-1)
+            recon_X = recon_X.view(recon_X.shape[0],recon_X.shape[1],-1,2)
+        else:
+            recon_X = recon_X.transpose(1,-1)
+            
+        print(recon_X.shape)
+        
         recon_x = self.istft(recon_X,self.stft.padder)
         return recon_x,mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q
 
 # %%
 
 #%%
-from torch import nn, optim
+from torch import optim
+from argparser import parser
+import os
+from dataset import WHAMR
+import matplotlib.pyplot as plt
 
-model = DCVAE(fs=16e3,nfft=320,dimz=64,net_type='strided')
-print(model.dimg)
+args = parser.parse_args(args=[])
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(device)
+
+model = DCVAE(fs=16e3,nfft=320,net_type='pooled')
+model = model.to(device)
 
 #%%
-optimizer = optim.Adam(params=model.parameters(),lr=1e-3)
-
-lossfun = nn.MSELoss()
+optimizer = optim.Adam(params=model.parameters(),lr=2e-4)
+lossfun = FreqSignalLoss(device=device)
 
 model.train()
 
-#%%
-for batch in range(1000):
+dataset = WHAMR(root='/home/jneri/scratch/data/',duration=3,set='test')
+train_loader = torch.utils.data.DataLoader(dataset,batch_size=64,shuffle=True,num_workers=8,pin_memory=True)
 
-    optimizer.zero_grad()
+x = next(iter(train_loader))
+x = x.to(device)
 
-    x = torch.cos(2*np.pi*torch.arange(8e3).view(1,-1)/16e3*torch.rand(16,1)*5e2 + torch.randn(16,1)*4)
+y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
 
-    y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
+# #%%
+# for epoch in range(400):
+#     train_loss = 0.0
+#     for batch,x in enumerate(train_loader):
+                
+#         x = x.to(device)
+        
+#         optimizer.zero_grad()
 
-    loss = lossfun(input=y,target=x)
+#         y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
 
-    ell, kld = model.loss_function(x,y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
-    loss = ell + kld
+#         ell, kld = model.loss_function(x,y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
+        
+#         ell = lossfun(estimate=y,target=x).mean()
+#         loss = ell + kld*(epoch > 5)
+        
+#         loss.backward()
 
-    loss.backward()
+#         optimizer.step()
+        
+#         train_loss += loss.item()
 
-    optimizer.step()
+#         if batch % 100 == 0:
+#             print("\t Batch {} / {} \t loss {:4.6f} \t ell {:4.2f} \t kld {:4.2f}".format(batch+1,len(train_loader),loss.item(),ell.item(),kld.item()))
+    
+#     train_loss /= len(train_loader)
+#     print("Epoch {} ===> {:4.4f}".format(epoch+1,train_loss))
+    
+#     plt.figure(figsize=(6,6))
+#     X = torch.stft(x[0].cpu().detach(),n_fft=512,return_complex=True,window=torch.hann_window(512))  
+#     Y = torch.stft(y[0].cpu().detach(),n_fft=512,return_complex=True,window=torch.hann_window(512))    
+#     plt.subplot(211)
+#     plt.imshow(X.abs().log10(),aspect='auto',origin='lower',cmap='jet')
+#     plt.subplot(212)
+#     plt.imshow(Y.abs().log10(),aspect='auto',origin='lower',cmap='jet')
+#     os.makedirs(args.output_directory,exist_ok=True)
+#     plt.savefig(args.output_directory + "/result_ccmse_{}.png".format(epoch+1))
+#     plt.close()
 
-    if batch % 10 == 0:
-        print("loss {:4.2f} \t ell {:4.2f} \t kld {:4.2f}".format(loss.item(),ell.item(),kld.item()))
-
-# %%
-import matplotlib.pyplot as plt
-plt.plot(x[0])
-plt.plot(y[0].detach().numpy())
-plt.xlim(0,512)
+#     z,h = model.sample_latent(N=100,M=1,device=device)
+#     X_sampled = model.decode(z)
+#     X_sampled = X_sampled.transpose(1,-1)[0]
+#     X = torch.complex(X_sampled[:,:,0],X_sampled[:,:,1]).T
+#     plt.imshow(20*np.log10(np.abs(X.cpu().detach().numpy())),aspect='auto',origin='lower')
+#     plt.savefig(args.output_directory + "/sample_ccmse_{}.png".format(epoch+1))
+#     plt.close()

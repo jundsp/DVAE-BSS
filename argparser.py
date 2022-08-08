@@ -35,5 +35,5 @@ parser.add_argument('--net-type', type=str, default='pooled', metavar='fname',
                     help='name of the dataset')
 parser.add_argument('--num-layers', type=int, default=2, metavar='fname',
                     help='number of sources in the model')
-parser.add_argument('--output-directory', type=str, default='/home/jneri/projects/def-depalle/jneri/output', metavar='fname',
+parser.add_argument('--output-directory', type=str, default='/home/jneri/projects/def-depalle/jneri/output/DCVAE', metavar='fname',
                     help='Folder containing the spectrogram data')
