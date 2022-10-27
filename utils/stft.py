@@ -42,7 +42,7 @@ def get_win(N_win, N_hop):
 class STFT(torch.nn.Module):
     """non-trainable STFT layer"""
 
-    def __init__(self, fs, winlen=.02, hopfrac=.5, nfft=None):
+    def __init__(self, fs, winlen=.02, hopfrac=.5, nfft=None, normalize=False):
         super(STFT, self).__init__()
         """
         fs          sampling rate
@@ -60,6 +60,8 @@ class STFT(torch.nn.Module):
         self.hopsize = int(self.winlen * float(hopfrac))
         self.frameShift = self.hopsize / fs
         win = get_win(self.winlen, self.hopsize)
+        if normalize:
+            win /= win.sum()
         self.register_buffer('win', torch.from_numpy(win).float())
 
         self.padder = Padder(fs, winlen=winlen, hopfrac=hopfrac, nfft=nfft)

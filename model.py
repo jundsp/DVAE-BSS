@@ -1,14 +1,14 @@
 #%%
 import torch
 from torch import nn
-import torch.nn.functional as F
 import math
 from utils.stft import STFT, iSTFT
 import numpy as np
 from lossfun import FreqSignalLoss
+from dataset import get_data_loaders
 
 class DSAE(nn.Module):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1):
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False):
         super(DSAE, self).__init__()
         self.dimx, self.dimz, self.dimh, self.dimg = dimx, dimz, dimh, dimg
         self.num_sources = num_sources
@@ -56,6 +56,8 @@ class DSAE(nn.Module):
             nn.Linear(self.dimz,self.dimh),
             nn.Tanh(),
             )
+
+        self.net_type = net_type
         
         if net_type == 'pooled':
             self.Encoder = PooledEncoder(dimx,dimg*num_sources)
@@ -64,9 +66,13 @@ class DSAE(nn.Module):
             self.Encoder = StridedEncoder(dimx,self.dec_chan)
             self.Decoder = StridedDecoder(self.dec_chan,dimx)
 
-        self.likelihood = NormalLikelihood()
+        self.activation = nn.Softplus()
+        self.activation = nn.Sigmoid()
+        # self.activation = nn.Identity()
+
+        self.likelihood = NormalLikelihood(scale_invariant=scale_invariant)
         self.criteria = nn.BCELoss(reduction='sum')
-        self.register_buffer('variance',torch.tensor(0.001))
+        self.register_buffer('variance',torch.tensor(1))
         self.register_parameter('smu',nn.Parameter(torch.zeros(1,num_sources,self.dimz)))
         self.register_parameter('smu0',nn.Parameter(torch.zeros(1,num_sources,self.dimz)))
         self.register_buffer('slogvar',torch.zeros(1,num_sources,self.dimz))
@@ -96,6 +102,7 @@ class DSAE(nn.Module):
         if self.net_type == 'strided':
             z = z.view(-1,self.dec_chan,self.dimz//self.dec_chan,z.shape[-1])
         x = self.Decoder(z)
+        x = self.activation(x)
         return x
  
     def combiner(self,z,h):
@@ -172,8 +179,9 @@ class DSAE(nn.Module):
         z0 = reparameterize(mu0_q,logvar0_q)
         mu_p, logvar_p = self.prior(z,z0)
         mu_s = self.decode(z)
+        mu_s = mu_s.view(-1,self.num_sources,mu_s.size(-2),mu_s.size(-1))
         recon_s = mu_s
-        recon_x = recon_s
+        recon_x = recon_s.sum(1)
         return recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q
 
 
@@ -217,9 +225,7 @@ class PooledEncoder(nn.Module):
         self.Network = nn.Sequential(
             nn.Conv1d(input_channels,64,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(64),
             nn.Conv1d(64,128,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(128),
-            nn.Conv1d(128,128,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(128),
-            nn.Conv1d(128,256,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(256),
-            nn.Conv1d(256,output_channels,kernel_size=3,stride=1,padding=1), nn.ReLU(),
+            nn.Conv1d(128,output_channels,kernel_size=3,stride=1,padding=1), nn.ReLU(),
             )
     def forward(self, x):
         return self.Network(x)
@@ -229,9 +235,7 @@ class PooledDecoder(nn.Module):
         super(PooledDecoder, self).__init__()
         upsample = nn.Upsample(scale_factor=2,mode='linear',align_corners=False)
         self.Network = nn.Sequential(
-            nn.ConvTranspose1d(input_channels,256,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(256), upsample,
-            nn.ConvTranspose1d(256,128,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(128), upsample,
-            nn.ConvTranspose1d(128,128,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(128), upsample,
+            nn.ConvTranspose1d(input_channels,128,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(128), upsample,
             nn.ConvTranspose1d(128,64,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(64), upsample,
             nn.ConvTranspose1d(64,output_channels,kernel_size=3,stride=1,padding=1), 
             )
@@ -275,16 +279,32 @@ def KLD(mean_1, logvar_1, prior_mean=0.0, prior_logvar=0.0):
     return  -0.5 * torch.sum(1 + logvar_1 - prior_logvar - (var_1 + (mean_1 - prior_mean).pow(2)) / var_2)
 
 class NormalLikelihood(nn.Module):
-    def __init__(self, variance=None, reduction='sum'):
+    def __init__(self, variance=None, reduction='sum', scale_invariant=False):
         super(NormalLikelihood, self).__init__()
         if variance is None:
             variance = torch.tensor(1.0)
+        self.scale_invariant = scale_invariant
         self.register_buffer("variance",variance)
 
     def forward(self, x, mean, var=None):
         if var is None:
             var = self.variance
-        return 0.5*torch.sum(var.log() + (x-mean).pow(2) / var)
+
+        alpha = torch.ones(x.shape[0],1,1)
+        # mu = mean.clone().detach()
+        # if self.scale_invariant:
+        #     for i in range(x.shape[0]):
+        #         alpha[i] = (x[i] * mu[i]).sum() / (x[i] * x[i]).sum()
+        # eps = x*alpha - mean
+
+        mu = mean.clone().detach()
+        if self.scale_invariant:
+            for i in range(x.shape[0]):
+                alpha[i] = (x[i] * mu[i]).sum() / (mu[i] * mu[i]).sum()
+                
+        eps = x - mean*alpha
+
+        return 0.5*torch.sum(var.log() + (eps).pow(2) / var)
 
 def reparameterize(mu, logvar):
     std = torch.exp(0.5*logvar)
@@ -309,7 +329,7 @@ class DCVAE(DSAE):
             
         self.net_type = net_type
             
-        dimg = 512
+        dimg = 128
         dimz = dimg 
         dimh = dimz
         chans = dimh
@@ -326,11 +346,12 @@ class DCVAE(DSAE):
             X = X.transpose(1,-1)
             
         k = X.shape[-1]
-        dsfac = 2**4
+        dsfac = 2**2
         pad_ = k % dsfac
         if pad_ > 0:
             pad_ = dsfac - pad_
-            X = F.pad(X, (0,pad_), "constant", 0)
+
+        X = torch.cat([X,torch.zeros(X.shape[0],X.shape[1],pad_)],-1)
             
         recon_X, recon_S, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = super().forward(X)
 
@@ -347,7 +368,6 @@ class DCVAE(DSAE):
         recon_x = self.istft(recon_X,self.stft.padder)
         return recon_x,mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q
 
-# %%
 
 #%%
 from torch import optim
@@ -355,75 +375,104 @@ from argparser import parser
 import os
 from dataset import WHAMR
 import matplotlib.pyplot as plt
+import soundfile as sf
 
-args = parser.parse_args(args=[])
+args = parser.parse_args()
+torch.manual_seed(1)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(device)
 
-model = DCVAE(fs=16e3,nfft=320,net_type='pooled')
+# AUDIO
+# s,fs = sf.read('/Users/julian/Documents/MATLAB/sounds/clar.wav')
+# stft = STFT(fs=fs,winlen=.02,hopfrac=.5,nfft=256,normalize=False)
+# x = stft(torch.from_numpy(s).view(1,-1)).float()
+# # x = torch.concat([x[:,:,:,0],x[:,:,:,1]],-1)
+# x = (x**2.0).sum(-1) ** .5
+# x = x.transpose(-2,-1)
+# # x = x / x.max()
+# x = x[:,:,:32]
+# dimx = 129
+
+kwds = {}
+train_loader, test_loader = get_data_loaders(args.data_directory,60,kwds)
+
+
+dimx = 28
+
+model = DSAE(dimx=dimx,dimz=16,num_sources=1,scale_invariant=True)
 model = model.to(device)
 
 #%%
 optimizer = optim.Adam(params=model.parameters(),lr=2e-4)
-# lossfun = FreqSignalLoss(device=device)
-
-model.train()
-
-dataset = WHAMR(root='/home/jneri/scratch/data/',duration=4,set='train')
-train_loader = torch.utils.data.DataLoader(dataset,batch_size=64,shuffle=True,num_workers=8,pin_memory=True)
-
 
 #%%
-for epoch in range(400):
-    train_loss = 0.0
-    for batch,x in enumerate(train_loader):
-                
-        x = x.to(device)
-        
+model.train()
+epochs = 1
+for epoch in range(epochs):
+    for k,batch_full in enumerate(train_loader):
+        batch = batch_full[0]
+        batch = batch.view(-1,6,batch.shape[-2],batch.shape[-1])
+        x = torch.cat([batch[:,i] for i in range(batch.shape[1])],-1)
+        for i in range(x.shape[0]):
+            x[i] = torch.roll(x[i],torch.randint(0,28,(1,)).item(),-1)
+        x = x[:,:,:128]
+
+
         optimizer.zero_grad()
-
-        y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
-
-        ell, kld = model.loss_function(x,y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
-        
-        # ell = lossfun(estimate=y,target=x).mean()
+        recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
+        ell, kld = model.loss_function(x,recon_x, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
         loss = ell + kld
-        
         loss.backward()
-
         optimizer.step()
-        
-        train_loss += loss.item()
 
-        if batch % 100 == 0:
-            print("\t Batch {} / {} \t loss {:4.6f} \t ell {:4.2f} \t kld {:4.2f}".format(batch+1,len(train_loader),loss.item(),ell.item(),kld.item()))
-    
-    train_loss /= len(train_loader)
-    print("Epoch {} ===> {:4.4f}".format(epoch+1,train_loss))
-    
-    plt.figure(figsize=(6,6))
-    X = torch.stft(x[0].cpu().detach(),n_fft=512,return_complex=True,window=torch.hann_window(512))  
-    Y = torch.stft(y[0].cpu().detach(),n_fft=512,return_complex=True,window=torch.hann_window(512))  
-    
-    kwds_imshow = dict(aspect='auto',origin='lower',cmap='jet')  
-    plt.subplot(211)
-    plt.imshow(X.abs().log10(),**kwds_imshow)
-    plt.subplot(212)
-    plt.imshow(Y.abs().log10(),**kwds_imshow)
-    os.makedirs(args.output_directory,exist_ok=True)
-    plt.savefig(args.output_directory + "/result_pool_{}.png".format(epoch+1))
-    plt.close()
+        if k % 100 == 0:
+            print('Epoch {} \t Batch {}  \t KLD = {:4.2f} \t ELL = {:4.2f} \t Loss = {:4.2f}'.format(epoch+1,k+1,kld.item(),ell.item(),loss.item()))
 
-    z,h = model.sample_latent(N=200,M=1,device=device)
-    X_sampled = model.decode(z)
-    if model.net_type == 'pooled':
-        X_sampled = X_sampled.transpose(-2,-1)
-        X_sampled = X_sampled.view(X_sampled.shape[0],X_sampled.shape[1],-1,2)
-    else:
-        X_sampled = X_sampled.transpose(1,-1)
-    X_sampled = X_sampled[0]
-    X = torch.complex(X_sampled[:,:,0],X_sampled[:,:,1]).T
-    plt.imshow(20*np.log10(np.abs(X.cpu().detach().numpy())),**kwds_imshow)
-    plt.savefig(args.output_directory + "/sample_pool_{}.png".format(epoch+1))
-    plt.close()
+#%%
+model.eval()
+batch_full = next(iter(test_loader))
+batch = batch_full[0]
+batch = batch.view(-1,6,batch.shape[-2],batch.shape[-1])
+x = torch.cat([batch[:,i] for i in range(batch.shape[1])],-1)
+for i in range(x.shape[0]):
+    x[i] = torch.roll(x[i],torch.randint(0,dimx,(1,)).item(),-1)
+x = x[:,:,:128]
+
+
+recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
+ell, kld = model.loss_function(x,recon_x, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
+loss = ell + kld
+
+print(' Test ==> \t KLD = {:4.2f} \t ELL = {:4.2f} \t Loss = {:4.2f}'.format(kld.item(),ell.item(),loss.item()))
+
+    
+X = x.detach().numpy()
+# X = np.abs(X[:,:dimx] + X[:,dimx:]*1j)
+
+X_hat = recon_x.detach().numpy()
+S_hat = recon_s.detach().numpy()
+# X_hat = np.abs(X_hat[:,:dimx] + X_hat[:,dimx:]*1j)
+kwds = dict(cmap='Greys',interpolation='none')
+plt.figure(figsize=(6,10))
+plt.subplot(411)
+plt.imshow(X[0],**kwds)
+plt.subplot(412)
+plt.imshow(X_hat[0],**kwds)
+plt.subplot(413)
+plt.imshow(S_hat[0,0],**kwds)
+# plt.subplot(414)
+# plt.imshow(S_hat[0,1],**kwds)
+plt.savefig(args.output_directory + 'mnist_test.pdf')
+
+
+# %%
+s, z, h = model.sample(N=100)
+
+S = s[0,:].detach().numpy()
+# S = np.abs(S[:,:dimx] + S[:,dimx:]*1j)
+
+plt.figure(figsize=(6,4))
+plt.imshow(S[0],**kwds)
+plt.savefig(args.output_directory + 'mnist_sampled.pdf')
+
+ # %%

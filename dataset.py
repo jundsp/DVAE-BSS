@@ -9,6 +9,20 @@ import torchaudio
 def round_pow2(x):
     return int(np.power(2,np.ceil(np.log2(x))))
 
+import torch
+import torch.utils.data
+from torchvision import datasets, transforms
+
+
+def get_data_loaders(directory,batch_size,kwargs):
+    train_set = datasets.MNIST(directory, train=True, download=True, transform=transforms.ToTensor())
+    test_set = datasets.MNIST(directory, train=False, download=True, transform=transforms.ToTensor())
+
+    train_loader = torch.utils.data.DataLoader(train_set,batch_size=batch_size, shuffle=True, **kwargs)
+    test_loader = torch.utils.data.DataLoader(test_set,batch_size=batch_size, shuffle=True, **kwargs)
+
+    return train_loader, test_loader
+    
 class STFT(nn.Module):
     def __init__(self, n_fft, hop_length = None):
         super(STFT, self).__init__()
