@@ -1,6 +1,7 @@
 #%%
 import torch
 from torch import nn
+import torch.nn.functional as F
 import math
 from utils.stft import STFT, iSTFT
 import numpy as np
@@ -65,7 +66,7 @@ class DSAE(nn.Module):
 
         self.likelihood = NormalLikelihood()
         self.criteria = nn.BCELoss(reduction='sum')
-        self.register_buffer('variance',torch.tensor(0.01))
+        self.register_buffer('variance',torch.tensor(0.001))
         self.register_parameter('smu',nn.Parameter(torch.zeros(1,num_sources,self.dimz)))
         self.register_parameter('smu0',nn.Parameter(torch.zeros(1,num_sources,self.dimz)))
         self.register_buffer('slogvar',torch.zeros(1,num_sources,self.dimz))
@@ -216,7 +217,9 @@ class PooledEncoder(nn.Module):
         self.Network = nn.Sequential(
             nn.Conv1d(input_channels,64,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(64),
             nn.Conv1d(64,128,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(128),
-            nn.Conv1d(128,output_channels,kernel_size=3,stride=1,padding=1), nn.ReLU(),
+            nn.Conv1d(128,128,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(128),
+            nn.Conv1d(128,256,kernel_size=3,stride=1,padding=1), pooling, nn.ReLU(), nn.BatchNorm1d(256),
+            nn.Conv1d(256,output_channels,kernel_size=3,stride=1,padding=1), nn.ReLU(),
             )
     def forward(self, x):
         return self.Network(x)
@@ -226,8 +229,10 @@ class PooledDecoder(nn.Module):
         super(PooledDecoder, self).__init__()
         upsample = nn.Upsample(scale_factor=2,mode='linear',align_corners=False)
         self.Network = nn.Sequential(
-            nn.ConvTranspose1d(input_channels,128,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(128), upsample,
-            nn.ConvTranspose1d(128,64,kernel_size=3,stride=1,padding=1), nn.ReLU(), upsample,
+            nn.ConvTranspose1d(input_channels,256,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(256), upsample,
+            nn.ConvTranspose1d(256,128,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(128), upsample,
+            nn.ConvTranspose1d(128,128,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(128), upsample,
+            nn.ConvTranspose1d(128,64,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(64), upsample,
             nn.ConvTranspose1d(64,output_channels,kernel_size=3,stride=1,padding=1), 
             )
     def forward(self, x):
@@ -304,7 +309,7 @@ class DCVAE(DSAE):
             
         self.net_type = net_type
             
-        dimg = 128
+        dimg = 512
         dimz = dimg 
         dimh = dimz
         chans = dimh
@@ -321,12 +326,11 @@ class DCVAE(DSAE):
             X = X.transpose(1,-1)
             
         k = X.shape[-1]
-        dsfac = 2**2
+        dsfac = 2**4
         pad_ = k % dsfac
         if pad_ > 0:
             pad_ = dsfac - pad_
-
-        X = torch.cat([X,torch.zeros(X.shape[0],X.shape[1],pad_)],-1)
+            X = F.pad(X, (0,pad_), "constant", 0)
             
         recon_X, recon_S, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = super().forward(X)
 
@@ -362,63 +366,64 @@ model = model.to(device)
 
 #%%
 optimizer = optim.Adam(params=model.parameters(),lr=2e-4)
-lossfun = FreqSignalLoss(device=device)
+# lossfun = FreqSignalLoss(device=device)
 
 model.train()
 
-# dataset = WHAMR(root='/home/jneri/scratch/data/',duration=3,set='test')
-# train_loader = torch.utils.data.DataLoader(dataset,batch_size=64,shuffle=True,num_workers=8,pin_memory=True)
+dataset = WHAMR(root='/home/jneri/scratch/data/',duration=4,set='train')
+train_loader = torch.utils.data.DataLoader(dataset,batch_size=64,shuffle=True,num_workers=8,pin_memory=True)
 
-# x = next(iter(train_loader))
 
-x = torch.randn(3,16000)
-x = x.to(device)
-
-y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
-
-# #%%
-# for epoch in range(400):
-#     train_loss = 0.0
-#     for batch,x in enumerate(train_loader):
+#%%
+for epoch in range(400):
+    train_loss = 0.0
+    for batch,x in enumerate(train_loader):
                 
-#         x = x.to(device)
+        x = x.to(device)
         
-#         optimizer.zero_grad()
+        optimizer.zero_grad()
 
-#         y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
+        y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
 
-#         ell, kld = model.loss_function(x,y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
+        ell, kld = model.loss_function(x,y, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
         
-#         ell = lossfun(estimate=y,target=x).mean()
-#         loss = ell + kld*(epoch > 5)
+        # ell = lossfun(estimate=y,target=x).mean()
+        loss = ell + kld
         
-#         loss.backward()
+        loss.backward()
 
-#         optimizer.step()
+        optimizer.step()
         
-#         train_loss += loss.item()
+        train_loss += loss.item()
 
-#         if batch % 100 == 0:
-#             print("\t Batch {} / {} \t loss {:4.6f} \t ell {:4.2f} \t kld {:4.2f}".format(batch+1,len(train_loader),loss.item(),ell.item(),kld.item()))
+        if batch % 100 == 0:
+            print("\t Batch {} / {} \t loss {:4.6f} \t ell {:4.2f} \t kld {:4.2f}".format(batch+1,len(train_loader),loss.item(),ell.item(),kld.item()))
     
-#     train_loss /= len(train_loader)
-#     print("Epoch {} ===> {:4.4f}".format(epoch+1,train_loss))
+    train_loss /= len(train_loader)
+    print("Epoch {} ===> {:4.4f}".format(epoch+1,train_loss))
     
-#     plt.figure(figsize=(6,6))
-#     X = torch.stft(x[0].cpu().detach(),n_fft=512,return_complex=True,window=torch.hann_window(512))  
-#     Y = torch.stft(y[0].cpu().detach(),n_fft=512,return_complex=True,window=torch.hann_window(512))    
-#     plt.subplot(211)
-#     plt.imshow(X.abs().log10(),aspect='auto',origin='lower',cmap='jet')
-#     plt.subplot(212)
-#     plt.imshow(Y.abs().log10(),aspect='auto',origin='lower',cmap='jet')
-#     os.makedirs(args.output_directory,exist_ok=True)
-#     plt.savefig(args.output_directory + "/result_ccmse_{}.png".format(epoch+1))
-#     plt.close()
+    plt.figure(figsize=(6,6))
+    X = torch.stft(x[0].cpu().detach(),n_fft=512,return_complex=True,window=torch.hann_window(512))  
+    Y = torch.stft(y[0].cpu().detach(),n_fft=512,return_complex=True,window=torch.hann_window(512))  
+    
+    kwds_imshow = dict(aspect='auto',origin='lower',cmap='jet')  
+    plt.subplot(211)
+    plt.imshow(X.abs().log10(),**kwds_imshow)
+    plt.subplot(212)
+    plt.imshow(Y.abs().log10(),**kwds_imshow)
+    os.makedirs(args.output_directory,exist_ok=True)
+    plt.savefig(args.output_directory + "/result_pool_{}.png".format(epoch+1))
+    plt.close()
 
-#     z,h = model.sample_latent(N=100,M=1,device=device)
-#     X_sampled = model.decode(z)
-#     X_sampled = X_sampled.transpose(1,-1)[0]
-#     X = torch.complex(X_sampled[:,:,0],X_sampled[:,:,1]).T
-#     plt.imshow(20*np.log10(np.abs(X.cpu().detach().numpy())),aspect='auto',origin='lower')
-#     plt.savefig(args.output_directory + "/sample_ccmse_{}.png".format(epoch+1))
-#     plt.close()
+    z,h = model.sample_latent(N=200,M=1,device=device)
+    X_sampled = model.decode(z)
+    if model.net_type == 'pooled':
+        X_sampled = X_sampled.transpose(-2,-1)
+        X_sampled = X_sampled.view(X_sampled.shape[0],X_sampled.shape[1],-1,2)
+    else:
+        X_sampled = X_sampled.transpose(1,-1)
+    X_sampled = X_sampled[0]
+    X = torch.complex(X_sampled[:,:,0],X_sampled[:,:,1]).T
+    plt.imshow(20*np.log10(np.abs(X.cpu().detach().numpy())),**kwds_imshow)
+    plt.savefig(args.output_directory + "/sample_pool_{}.png".format(epoch+1))
+    plt.close()
