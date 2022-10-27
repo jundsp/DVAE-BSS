@@ -18,4 +18,4 @@ pip install --no-index -r $SOURCEDIR/requirements.txt
 
 echo "Loading tensorboard and running Python script"
 # Start training
-python $SOURCEDIR/model.py
+python $SOURCEDIR/model.py --data_directory /home/jneri/projects/def-depalle/jneri/data --output_directory /home/jneri/projects/def-depalle/jneri/output/SVAE
