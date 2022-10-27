@@ -462,7 +462,7 @@ plt.subplot(413)
 plt.imshow(S_hat[0,0],**kwds)
 # plt.subplot(414)
 # plt.imshow(S_hat[0,1],**kwds)
-plt.savefig(args.output_directory + 'mnist_test.pdf')
+plt.savefig(args.output_directory + '/mnist_test.png')
 
 
 # %%
@@ -473,6 +473,6 @@ S = s[0,:].detach().numpy()
 
 plt.figure(figsize=(6,4))
 plt.imshow(S[0],**kwds)
-plt.savefig(args.output_directory + 'mnist_sampled.pdf')
+plt.savefig(args.output_directory + '/mnist_sampled.png')
 
  # %%
