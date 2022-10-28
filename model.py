@@ -236,7 +236,7 @@ class PooledDecoder(nn.Module):
         upsample = nn.Upsample(scale_factor=2,mode='linear',align_corners=False)
         self.Network = nn.Sequential(
             nn.ConvTranspose1d(input_channels,128,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(128), upsample,
-            nn.ConvTranspose1d(128,64,kernel_size=3,stride=1,padding=1), nn.ReLU(), nn.BatchNorm1d(64), upsample,
+            nn.ConvTranspose1d(128,64,kernel_size=3,stride=1,padding=1), nn.ReLU(), upsample,
             nn.ConvTranspose1d(64,output_channels,kernel_size=3,stride=1,padding=1), 
             )
     def forward(self, x):
@@ -291,13 +291,14 @@ class NormalLikelihood(nn.Module):
             var = self.variance
 
         alpha = torch.ones_like(mean)[:,0,0].view(-1,1,1)
-        # mu = mean.clone().detach()
+        mu = mean.clone().detach()
+        
         # if self.scale_invariant:
         #     for i in range(x.shape[0]):
         #         alpha[i] = (x[i] * mu[i]).sum() / (x[i] * x[i]).sum()
+                
         # eps = x*alpha - mean
 
-        mu = mean.clone().detach()
         if self.scale_invariant:
             for i in range(x.shape[0]):
                 alpha[i] = (x[i] * mu[i]).sum() / (mu[i] * mu[i]).sum()
@@ -370,19 +371,27 @@ class DCVAE(DSAE):
 
 def test(epoch=1):
     model.eval()
-    batch_full = next(iter(test_loader))
-    batch = batch_full[0]
-    batch = batch.view(-1,8,batch.shape[-2],batch.shape[-1])
-    x = torch.cat([batch[:,i] for i in range(batch.shape[1])],-1)
-    for i in range(x.shape[0]):
-        x[i] = torch.roll(x[i],torch.randint(0,dimx,(1,)).item(),-1)
-    x = x[:,:,:168].to(device)
+    losses = dict(kld=0.0,ell=0.0,loss=0.0)
+    for k,batch_full in enumerate(test_loader):
+        batch = batch_full[0]
+        batch = batch.view(10,-1,batch.shape[-2],batch.shape[-1])
+        x = torch.cat([batch[:,i] for i in range(batch.shape[1])],-1)
+        for i in range(x.shape[0]):
+            x[i] = torch.roll(x[i],torch.randint(0,28,(1,)).item(),-1)
+        x = x[:,:,:148].to(device)
+        x = .5*(x[::2] + x[1::2])
 
-    recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
-    ell, kld = model.loss_function(x,recon_x, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
-    loss = ell + kld
+        recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
+        ell, kld = model.loss_function(x,recon_x, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
+        loss = ell + kld
+        
+        losses['kld']+=(kld.item())
+        losses['ell']+=(ell.item())
+        losses['loss']+=(loss.item())
+    for l in losses:
+        losses[l] /= k
 
-    print(' Test ==> \t KLD = {:4.2f} \t ELL = {:4.2f} \t Loss = {:4.2f}'.format(kld.item(),ell.item(),loss.item()))
+    print(' Test ==> Epoch {} \t KLD = {:4.2f} \t ELL = {:4.2f} \t Loss = {:4.2f}'.format(epoch+1,losses['kld'],losses['ell'],losses['loss']))
 
     X = x.cpu().detach().numpy()
     # X = np.abs(X[:,:dimx] + X[:,dimx:]*1j)
@@ -390,17 +399,19 @@ def test(epoch=1):
     X_hat = recon_x.cpu().detach().numpy()
     S_hat = recon_s.cpu().detach().numpy()
     # X_hat = np.abs(X_hat[:,:dimx] + X_hat[:,dimx:]*1j)
-    kwds = dict(cmap='Greys',interpolation='none')
+    kwds = dict(cmap='Greys',interpolation='none',vmin=0,vmax=2)
     plt.figure(figsize=(6,10))
     plt.subplot(411)
     plt.imshow(X[0],**kwds)
+    plt.title('epoch = {}'.format(epoch+1))
     plt.subplot(412)
     plt.imshow(X_hat[0],**kwds)
     plt.subplot(413)
     plt.imshow(S_hat[0,0],**kwds)
-    # plt.subplot(414)
-    # plt.imshow(S_hat[0,1],**kwds)
-    plt.savefig(args.output_directory + '/mnist_test_{}.png'.format(epoch+1))
+    plt.subplot(414)
+    plt.imshow(S_hat[0,1],**kwds)
+    plt.savefig(args.output_directory + '/mnist_test_.png')
+    plt.close()
 
     s, z, h = model.sample(N=100,device=device)
     S = s[0,:].cpu().detach().numpy()
@@ -408,7 +419,9 @@ def test(epoch=1):
 
     plt.figure(figsize=(6,4))
     plt.imshow(S[0],**kwds)
-    plt.savefig(args.output_directory + '/mnist_sampled_{}.png'.format(epoch+1))
+    plt.title('epoch = {}'.format(epoch+1))
+    plt.savefig(args.output_directory + '/mnist_sampled_.png')
+    plt.close()
 
 #%%
 from torch import optim
@@ -435,26 +448,27 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # dimx = 129
 
 kwds = {}
-train_loader, test_loader = get_data_loaders(args.data_directory,160,kwds)
+train_loader, test_loader = get_data_loaders(args.data_directory,120,kwds)
 
 dimx = 28
 
-model = DSAE(dimx=dimx,dimz=16,num_sources=1,scale_invariant=True)
+model = DSAE(dimx=dimx,dimz=16,num_sources=2,scale_invariant=True)
 model = model.to(device)
 
-#%%
 optimizer = optim.Adam(params=model.parameters(),lr=2e-4)
 
 #%%
 for epoch in range(args.epochs):
     model.train()
+    losses = dict(kld=0.0,ell=0.0,loss=0.0)
     for k,batch_full in enumerate(train_loader):
         batch = batch_full[0]
-        batch = batch.view(-1,8,batch.shape[-2],batch.shape[-1])
+        batch = batch.view(10,-1,batch.shape[-2],batch.shape[-1])
         x = torch.cat([batch[:,i] for i in range(batch.shape[1])],-1)
         for i in range(x.shape[0]):
             x[i] = torch.roll(x[i],torch.randint(0,28,(1,)).item(),-1)
-        x = x[:,:,:168].to(device)
+        x = x[:,:,:148].to(device)
+        x = .5*(x[::2] + x[1::2])
 
 
         optimizer.zero_grad()
@@ -463,8 +477,15 @@ for epoch in range(args.epochs):
         loss = ell + kld
         loss.backward()
         optimizer.step()
+        
+        
+        losses['kld']+=(kld.item())
+        losses['ell']+=(ell.item())
+        losses['loss']+=(loss.item())
+        
+    for l in losses:
+        losses[l] /= k
 
-        if k % 100 == 0:
-            print('Epoch {} \t Batch {}  \t KLD = {:4.2f} \t ELL = {:4.2f} \t Loss = {:4.2f}'.format(epoch+1,k+1,kld.item(),ell.item(),loss.item()))
+    print(' Train ==> Epoch {} \t KLD = {:4.2f} \t ELL = {:4.2f} \t Loss = {:4.2f}'.format(epoch+1,losses['kld'],losses['ell'],losses['loss']))
             
     test(epoch)

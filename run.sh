@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1  # Request GPU "generic resources"
 #SBATCH --cpus-per-task=16  # Cores proportional to GPUs: 6 on Cedar, 10 on Béluga, 16 on Graham.
 #SBATCH --mem=32000M       # Memory proportional to GPUs: 32000 Cedar, 47000 Béluga, 64000 Graham.
-#SBATCH --time=00-01:00:00  # DD-HH:MM:SS
+#SBATCH --time=00-04:00:00  # DD-HH:MM:SS
 
 module load python/3.8
 
@@ -17,5 +17,5 @@ source $SLURM_TMPDIR/env/bin/activate
 pip install --no-index -r $SOURCEDIR/requirements.txt
 
 echo "Loading tensorboard and running Python script"
-# Start training
-python $SOURCEDIR/model.py --data-directory /home/jneri/projects/def-depalle/jneri/data
+# Start training, -u forces python to be unbuffered so it prints immediately
+python -u $SOURCEDIR/model.py --data-directory /home/jneri/projects/def-depalle/jneri/data --epochs 100
