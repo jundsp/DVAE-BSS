@@ -290,7 +290,7 @@ class NormalLikelihood(nn.Module):
         if var is None:
             var = self.variance
 
-        alpha = torch.ones(x.shape[0],1,1)
+        alpha = torch.ones_like(mean)[:,0,0].view(-1,1,1)
         # mu = mean.clone().detach()
         # if self.scale_invariant:
         #     for i in range(x.shape[0]):
@@ -368,6 +368,47 @@ class DCVAE(DSAE):
         recon_x = self.istft(recon_X,self.stft.padder)
         return recon_x,mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q
 
+def test(epoch=1):
+    model.eval()
+    batch_full = next(iter(test_loader))
+    batch = batch_full[0]
+    batch = batch.view(-1,8,batch.shape[-2],batch.shape[-1])
+    x = torch.cat([batch[:,i] for i in range(batch.shape[1])],-1)
+    for i in range(x.shape[0]):
+        x[i] = torch.roll(x[i],torch.randint(0,dimx,(1,)).item(),-1)
+    x = x[:,:,:168].to(device)
+
+    recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
+    ell, kld = model.loss_function(x,recon_x, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
+    loss = ell + kld
+
+    print(' Test ==> \t KLD = {:4.2f} \t ELL = {:4.2f} \t Loss = {:4.2f}'.format(kld.item(),ell.item(),loss.item()))
+
+    X = x.cpu().detach().numpy()
+    # X = np.abs(X[:,:dimx] + X[:,dimx:]*1j)
+
+    X_hat = recon_x.cpu().detach().numpy()
+    S_hat = recon_s.cpu().detach().numpy()
+    # X_hat = np.abs(X_hat[:,:dimx] + X_hat[:,dimx:]*1j)
+    kwds = dict(cmap='Greys',interpolation='none')
+    plt.figure(figsize=(6,10))
+    plt.subplot(411)
+    plt.imshow(X[0],**kwds)
+    plt.subplot(412)
+    plt.imshow(X_hat[0],**kwds)
+    plt.subplot(413)
+    plt.imshow(S_hat[0,0],**kwds)
+    # plt.subplot(414)
+    # plt.imshow(S_hat[0,1],**kwds)
+    plt.savefig(args.output_directory + '/mnist_test_{}.png'.format(epoch+1))
+
+    s, z, h = model.sample(N=100,device=device)
+    S = s[0,:].cpu().detach().numpy()
+    # S = np.abs(S[:,:dimx] + S[:,dimx:]*1j)
+
+    plt.figure(figsize=(6,4))
+    plt.imshow(S[0],**kwds)
+    plt.savefig(args.output_directory + '/mnist_sampled_{}.png'.format(epoch+1))
 
 #%%
 from torch import optim
@@ -394,8 +435,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # dimx = 129
 
 kwds = {}
-train_loader, test_loader = get_data_loaders(args.data_directory,60,kwds)
-
+train_loader, test_loader = get_data_loaders(args.data_directory,160,kwds)
 
 dimx = 28
 
@@ -406,16 +446,15 @@ model = model.to(device)
 optimizer = optim.Adam(params=model.parameters(),lr=2e-4)
 
 #%%
-model.train()
-epochs = 1
-for epoch in range(epochs):
+for epoch in range(args.epochs):
+    model.train()
     for k,batch_full in enumerate(train_loader):
         batch = batch_full[0]
-        batch = batch.view(-1,6,batch.shape[-2],batch.shape[-1])
+        batch = batch.view(-1,8,batch.shape[-2],batch.shape[-1])
         x = torch.cat([batch[:,i] for i in range(batch.shape[1])],-1)
         for i in range(x.shape[0]):
             x[i] = torch.roll(x[i],torch.randint(0,28,(1,)).item(),-1)
-        x = x[:,:,:128]
+        x = x[:,:,:168].to(device)
 
 
         optimizer.zero_grad()
@@ -427,52 +466,5 @@ for epoch in range(epochs):
 
         if k % 100 == 0:
             print('Epoch {} \t Batch {}  \t KLD = {:4.2f} \t ELL = {:4.2f} \t Loss = {:4.2f}'.format(epoch+1,k+1,kld.item(),ell.item(),loss.item()))
-
-#%%
-model.eval()
-batch_full = next(iter(test_loader))
-batch = batch_full[0]
-batch = batch.view(-1,6,batch.shape[-2],batch.shape[-1])
-x = torch.cat([batch[:,i] for i in range(batch.shape[1])],-1)
-for i in range(x.shape[0]):
-    x[i] = torch.roll(x[i],torch.randint(0,dimx,(1,)).item(),-1)
-x = x[:,:,:128]
-
-
-recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
-ell, kld = model.loss_function(x,recon_x, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
-loss = ell + kld
-
-print(' Test ==> \t KLD = {:4.2f} \t ELL = {:4.2f} \t Loss = {:4.2f}'.format(kld.item(),ell.item(),loss.item()))
-
-    
-X = x.detach().numpy()
-# X = np.abs(X[:,:dimx] + X[:,dimx:]*1j)
-
-X_hat = recon_x.detach().numpy()
-S_hat = recon_s.detach().numpy()
-# X_hat = np.abs(X_hat[:,:dimx] + X_hat[:,dimx:]*1j)
-kwds = dict(cmap='Greys',interpolation='none')
-plt.figure(figsize=(6,10))
-plt.subplot(411)
-plt.imshow(X[0],**kwds)
-plt.subplot(412)
-plt.imshow(X_hat[0],**kwds)
-plt.subplot(413)
-plt.imshow(S_hat[0,0],**kwds)
-# plt.subplot(414)
-# plt.imshow(S_hat[0,1],**kwds)
-plt.savefig(args.output_directory + 'mnist_test.pdf')
-
-
-# %%
-s, z, h = model.sample(N=100)
-
-S = s[0,:].detach().numpy()
-# S = np.abs(S[:,:dimx] + S[:,dimx:]*1j)
-
-plt.figure(figsize=(6,4))
-plt.imshow(S[0],**kwds)
-plt.savefig(args.output_directory + 'mnist_sampled.pdf')
-
- # %%
+            
+    test(epoch)
