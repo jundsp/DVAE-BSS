@@ -37,3 +37,5 @@ parser.add_argument('--num-layers', type=int, default=2, metavar='fname',
                     help='number of sources in the model')
 parser.add_argument('--output-directory', type=str, default='results', metavar='fname',
                     help='Folder containing the spectrogram data')
+parser.add_argument('--job-id', type=str, default='local', metavar='fname',
+                    help='Slurm job id')
