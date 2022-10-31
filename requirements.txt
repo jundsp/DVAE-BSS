@@ -15,4 +15,6 @@ torchvision
 torchaudio
 tensorboard
 soundfile
+pathlib
+pandas
 # samplerate

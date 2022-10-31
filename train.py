@@ -11,6 +11,7 @@ import numpy as np
 from argparser import parser
 from datetime import datetime
 import matplotlib.pyplot as plt
+from utils.utils import torchToNumpy, mag2db
 
 def dict_average(input):
     avg = {}
@@ -34,33 +35,25 @@ def save_result(x,x_hat,s_hat,filename='result.png',epoch=1):
     # Mask estimate
     M = s_hat * (x /  s_hat.sum(1)).unsqueeze(1)
     
-    X = x.cpu().detach().numpy()
-    X_hat = x_hat.cpu().detach().numpy()
-    S_hat = s_hat.cpu().detach().numpy()
-    M = M.cpu().detach().numpy()
+    X = torchToNumpy(x)
+    X_hat = torchToNumpy(x_hat)
+    S_hat = torchToNumpy(s_hat)
+    M = torchToNumpy(M)
     kwds = dict(cmap='jet',interpolation='none',vmin=0,vmax=2)
+    if args.dataset != 'MNIST': 
+        kwds['origin'] = 'lower'
+        kwds['aspect'] = 'auto'
     fig = plt.figure(figsize=(10,7))
-    plt.subplot(611)
-    plt.imshow(X[0],**kwds)
-    plt.colorbar()
-    plt.title('epoch = {}'.format(epoch))
-    plt.subplot(612)
-    plt.imshow(X_hat[0],**kwds)
-    plt.colorbar()
-    plt.subplot(613)
-    plt.imshow(S_hat[0,0],**kwds)
-    plt.colorbar()
-    plt.subplot(615)
-    plt.imshow(M[0,0],**kwds)
-    plt.colorbar()
-    if args.num_sources == 2:
-        plt.subplot(614)
-        plt.imshow(S_hat[0,1],**kwds)
-        plt.colorbar()
-        plt.subplot(616)
-        plt.imshow(M[0,1],**kwds)
-        plt.colorbar()
+    fig,ax = plt.subplots(2,3,figsize=(8,6))
+    ax[0,0].imshow(X[0],**kwds)
+    ax[1,0].imshow(X_hat[0],**kwds)
+    ax[1,1].imshow(S_hat[0,0],**kwds)
+    ax[0,1].imshow(M[0,0],**kwds)    
+    for s in range(1,args.num_sources):
+        ax[1,s+1].imshow(S_hat[0,s],**kwds)
+        ax[0,s+1].imshow(M[0,s],**kwds)
     
+    ax[0,0].set_title('epoch = {}'.format(epoch))
     plt.tight_layout()
     plt.savefig(filename)    
     writer.add_figure('Results', fig, epoch)
@@ -69,10 +62,13 @@ def save_result(x,x_hat,s_hat,filename='result.png',epoch=1):
 def save_sample(N=10,filename='result.png',epoch=1):
     
     s = model.sample(N=N,device=device)[0]
-    S = s[0,:].cpu().detach().numpy()
+    S = torchToNumpy( s[0,:] )
             
-    fig = plt.figure(figsize=(10,4))
+    fig = plt.figure(figsize=(6,4))
     kwds = dict(cmap='jet',interpolation='none',vmin=0,vmax=2)
+    if args.dataset != 'MNIST': 
+        kwds['origin'] = 'lower'
+        kwds['aspect'] = 'auto'
     plt.imshow(S[0],**kwds)
     plt.title('epoch = {}'.format(epoch))
     plt.savefig(filename)    
@@ -105,8 +101,8 @@ def process_data(data,duration=256):
 def train(epoch):
     model.train()
     info = {'loss':[],'ell':[],'kld':[]}
-    for batch_idx, (data,_) in enumerate(train_loader):
-        data = process_data(data,duration=args.duration).to(device)
+    for batch_idx, (data) in enumerate(train_loader):
+        data = pipeline(data.to(device))
 
         optimizer.zero_grad()
         recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(data)
@@ -119,12 +115,12 @@ def train(epoch):
         info['ell'].append(ell.item())
         info['kld'].append(kld.item())
 
-        if batch_idx % args.log_interval == 0:
+        if (batch_idx+1) % args.log_interval == 0:
             print(('Epoch {:2.0f} - {:3.0f} % ==> | Loss = {:4.2f}\t| ELL = {:4.2f}\t| KLD = {:4.2f}').format(
                 epoch,100.0*(batch_idx+1)/float(len(train_loader)),loss.item(),ell.item(),kld.item()))
 
     info = dict_average(info)
-    print(('Epoch {:2.0f} ==> Train Loss = {:4.2f}').format(epoch, info['loss']))
+    print(('Epoch {:2.0f} ==> \t TRAIN | Loss = {:4.2f}\t| ELL = {:4.2f}\t| KLD = {:4.2f}').format(epoch, info['loss'], info['ell'], info['kld']))
     save_info(info,category='Train',epoch=epoch)
     return info
 
@@ -132,8 +128,8 @@ def test(epoch):
     model.eval()
     info = {'loss':[],'ell':[],'kld':[]}
     with torch.no_grad():
-        for batch_idx, (data,_) in enumerate(test_loader):
-            data = process_data(data,duration=args.duration).to(device)
+        for batch_idx, (data) in enumerate(test_loader):
+            data = pipeline(data.to(device))
 
             recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(data)
             ell, kld = model.loss_function(data,recon_x, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
@@ -144,7 +140,7 @@ def test(epoch):
             info['kld'].append(kld.item())
 
         info = dict_average(info)
-        print(('Epoch {:2.0f} ==> Test Loss = {:4.2f}').format(epoch, info['loss']))
+        print(('\t \t VALIDATE | Loss = {:4.2f}\t| ELL = {:4.2f}\t| KLD = {:4.2f}').format(info['loss'], info['ell'], info['kld']))
         save_result(data,recon_x,recon_s,filename=path_results+'/result.png',epoch=epoch)
         save_sample(N=mu_q.size(1),filename=path_results+'/sample.png',epoch=epoch)
         save_info(info,category='Test',epoch=epoch)
@@ -168,15 +164,21 @@ if __name__ == "__main__":
     if args.dataset == 'MUMS':
         dim_data = (128,args.duration)
         train_set = Audioset(args.data_directory + '/MUMS/DVDs', spectrogram=True, duration=dim_data[1], bins=dim_data[0])
-        test_set = Audioset(args.data_directory + '/MUMS/DVDs/STRINGS/VIOLINS/', spectrogram=True, duration=dim_data[1], bins=dim_data[0])
+        test_set = Audioset(args.data_directory + '/MUMS/DVDs/WOODWINDS/SAXOPHONES/', spectrogram=True, duration=dim_data[1], bins=dim_data[0])
+        
+    print(args.dataset)
         
     if args.dataset == 'RWC':
-        dim_data = (128,args.duration)
-        train_set = Audioset(args.data_directory + '/RWC', spectrogram=True, duration=dim_data[1], bins=dim_data[0])
-        test_set = Audioset(args.data_directory + '/RWC/502', spectrogram=True, duration=dim_data[1], bins=dim_data[0])
+        nfft = 512
+        dim_data = (nfft//2+1,args.duration)
+        transform = transforms.Compose([Shift(shift_amount=.1)])
+        train_set = Audioset(root=args.data_directory,path_csv='rwc_dataset/validate.csv',duration=6,nsrc=2,transform=transform,)
+        test_set =  Audioset(root=args.data_directory,path_csv='rwc_dataset/test.csv',duration=6,nsrc=2,transform=transform,)
         
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=True, **kwargs)
+    
+    pipeline = AudioPipeline(n_time=args.duration,n_fft=nfft,hop_length=128,compression=.5).to(device)
     
     print("Trainset -> found {} files.".format(len(train_set)))
     print("Testset -> found {} files.".format(len(test_set)))
@@ -213,6 +215,7 @@ if __name__ == "__main__":
         net_type=args.net_type,
         num_layers=args.num_layers,
         scale_invariant=True,
+        layer_channels=(64,128)
         ).to(device)
 
     optimizer = optim.Adam(params=model.parameters(),lr=lr)

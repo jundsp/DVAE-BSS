@@ -9,7 +9,7 @@ parser.add_argument('--save-interval', type=int, default=1, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--num-workers', type=int, default=4, metavar='N',
                     help='number of epochs to train (default: 10)')
-parser.add_argument('--log-interval', type=int, default=100, metavar='N',
+parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='number of batches to wait for printing')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
