@@ -9,7 +9,7 @@ from dataset import get_data_loaders
 from torch.nn import functional as F
 
 class DSAE(nn.Module):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False):
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None):
         super(DSAE, self).__init__()
         self.dimx, self.dimz, self.dimh, self.dimg = dimx, dimz, dimh, dimg
         self.num_sources = num_sources
@@ -61,11 +61,13 @@ class DSAE(nn.Module):
         self.net_type = net_type
         
         if net_type == 'pooled':
-            self.Encoder = PooledEncoder(dimx,dimg*num_sources)
-            self.Decoder = PooledDecoder(dimz,dimx)
+            if layer_channels is None:
+                layer_channels = (64,128)
+            self.Encoder = PooledEncoder(dimx,dimg*num_sources,layer_channels=layer_channels)
+            self.Decoder = PooledDecoder(dimz,dimx,layer_channels=layer_channels)
         else: 
-            self.Encoder = StridedEncoder(dimx,self.dec_chan)
-            self.Decoder = StridedDecoder(self.dec_chan,dimx)
+            self.Encoder = StridedEncoder(1,self.dec_chan)
+            self.Decoder = StridedDecoder(self.dec_chan,1)
 
         self.activation = nn.Softplus()
         self.activation = nn.Sigmoid()
@@ -221,26 +223,47 @@ class StridedDecoder(nn.Module):
 
 # Pooled
 class PooledEncoder(nn.Module):
-    def __init__(self,input_channels,output_channels):
+    def __init__(self,input_channels,output_channels,layer_channels=None):
         super(PooledEncoder, self).__init__()
+
+        if layer_channels is None: 
+            layer_channels = (64,128)
+            
         pooling = nn.MaxPool1d(kernel_size=2,stride=2,padding=0)
-        self.Network = nn.Sequential(
-            nn.Conv1d(input_channels,64,kernel_size=3,stride=1,padding=1), pooling, nn.LeakyReLU(), nn.BatchNorm1d(64),
-            nn.Conv1d(64,128,kernel_size=3,stride=1,padding=1), pooling, nn.LeakyReLU(), nn.BatchNorm1d(128),
-            nn.Conv1d(128,output_channels,kernel_size=3,stride=1,padding=1), nn.LeakyReLU(),
-            )
+        mlist = nn.ModuleList()
+        mlist.append(nn.Sequential(
+            nn.Conv1d(input_channels,layer_channels[0],kernel_size=3,stride=1,padding=1), pooling, nn.LeakyReLU(), nn.BatchNorm1d(layer_channels[0])))
+        for ii in range(len(layer_channels)-1):
+            mlist.append(nn.Sequential(
+                nn.Conv1d(layer_channels[ii],layer_channels[ii+1],kernel_size=3,stride=1,padding=1), pooling, nn.LeakyReLU(), nn.BatchNorm1d(layer_channels[ii+1])))
+        mlist.append(nn.Sequential(
+            nn.Conv1d(layer_channels[-1],output_channels,kernel_size=3,stride=1,padding=1), nn.LeakyReLU()))
+        
+        self.Network = nn.Sequential(*mlist)
+        
     def forward(self, x):
         return self.Network(x)
 
 class PooledDecoder(nn.Module):
-    def __init__(self,input_channels,output_channels):
+    def __init__(self,input_channels,output_channels,layer_channels=None):
         super(PooledDecoder, self).__init__()
+        
+        if layer_channels is None: 
+            layer_channels = (64,128)
+            
         upsample = nn.Upsample(scale_factor=2,mode='linear',align_corners=False)
-        self.Network = nn.Sequential(
-            nn.ConvTranspose1d(input_channels,128,kernel_size=3,stride=1,padding=1), nn.LeakyReLU(), nn.BatchNorm1d(128), upsample,
-            nn.ConvTranspose1d(128,64,kernel_size=3,stride=1,padding=1), nn.LeakyReLU(),  nn.BatchNorm1d(64), upsample,
-            nn.ConvTranspose1d(64,output_channels,kernel_size=3,stride=1,padding=1), 
-            )
+            
+        mlist = nn.ModuleList()
+        mlist.append(nn.Sequential(
+            nn.Conv1d(input_channels,layer_channels[-1],kernel_size=3,stride=1,padding=1), nn.LeakyReLU(), nn.BatchNorm1d(layer_channels[-1]), upsample))
+        for ii in range(len(layer_channels)-2,-1,-1):
+            mlist.append(nn.Sequential(
+                nn.Conv1d(layer_channels[ii+1],layer_channels[ii],kernel_size=3,stride=1,padding=1), nn.LeakyReLU(), nn.BatchNorm1d(layer_channels[ii]), upsample))
+        mlist.append(nn.Sequential(
+            nn.Conv1d(layer_channels[0],output_channels,kernel_size=3,stride=1,padding=1)))
+        
+        self.Network = nn.Sequential(*mlist)
+        
     def forward(self, x):
         return self.Network(x)
 

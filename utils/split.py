@@ -1,73 +1,83 @@
-#%%
-import numpy as np
-import soundfile as sf
-from pathlib import Path
-import matplotlib.pyplot as plt
-import scipy.signal as sig
-import os
+# #%%
+# import numpy as np
+# import soundfile as sf
+# from pathlib import Path
+# import matplotlib.pyplot as plt
+# import scipy.signal as sig
+# import os
+# import argparse
 
-def walk_files(root, suffix, prefix=False, remove_suffix=False):
-    root = os.path.expanduser(root)
-    for dirName, subdirList, fileList in os.walk(root):
-        for fname in fileList:
-            if fname.lower().endswith(suffix):
-                descr = fname[: -len(suffix)]
-                if remove_suffix:
-                    fname = fname[: -len(suffix)]
-                if prefix:
-                    fname = os.path.join(root, dirName,fname)
-                yield fname, descr
+# parser = argparse.ArgumentParser(description='DSAE Example')
+# parser.add_argument('--starting', type=int, default=0, metavar='N',
+#                     help='input batch size for training (default: 512)')
+# parser.add_argument('--nfiles', type=int, default=500, metavar='N',
+#                     help='number of epochs to train (default: 10)')
 
-def split_wav(x, fs, min_dur=.1, thresh=-100,L=500):
+# def walk_files(root, suffix, prefix=False, remove_suffix=False):
+#     root = os.path.expanduser(root)
+#     for dirName, subdirList, fileList in os.walk(root):
+#         for fname in fileList:
+#             if fname.lower().endswith(suffix):
+#                 descr = fname[: -len(suffix)]
+#                 if remove_suffix:
+#                     fname = fname[: -len(suffix)]
+#                 if prefix:
+#                     fname = os.path.join(root, dirName,fname)
+#                 yield fname, descr
 
-    y = np.abs(x)
-    y /= y.max()
+# def split_wav(x, fs, min_dur=.1, thresh=-100,L=500):
 
-    b = np.ones(L) / L
-    y = sig.lfilter(b,1, y)
+#     y = np.abs(x)
+#     y /= y.max()
 
-    min_length = min_dur * fs
+#     b = np.ones(L) / L
+#     y = sig.lfilter(b,1, y)
 
-    ydb = 20*np.log10(y)
-    low = (ydb < thresh).astype(int)
-    low[0] = 1
-    low[-1] = 1
-    changepoints = np.diff(low)
-    turnon = np.nonzero(changepoints == -1)[0]
-    turnoff = np.nonzero(changepoints == 1)[0]
+#     min_length = min_dur * fs
 
-    split = []
-    for i in range(len(turnon)):
-        if turnoff[i] - turnon[i] > min_length:
-            stem = x[turnon[i]:turnoff[i]]
-            split.append(stem)
+#     ydb = 20*np.log10(y)
+#     low = (ydb < thresh).astype(int)
+#     low[0] = 1
+#     low[-1] = 1
+#     changepoints = np.diff(low)
+#     turnon = np.nonzero(changepoints == -1)[0]
+#     turnoff = np.nonzero(changepoints == 1)[0]
 
-    return split
+#     split = []
+#     for i in range(len(turnon)):
+#         if turnoff[i] - turnon[i] > min_length:
+#             stem = x[turnon[i]:turnoff[i]]
+#             split.append(stem)
 
-#%%
-data_path = Path('/Users/julian/Desktop/').resolve()
-dataset = 'RWC'
-input_path = data_path.joinpath(dataset)
-output_path =data_path.joinpath(dataset + '_stems')
+#     return split
 
-walker = walk_files(input_path, suffix='.wav', prefix=True)
-_walker = list(walker)
-n_files = len(_walker)
+# #%%
+# args = parser.parse_args()
 
-output_path.mkdir(parents=True, exist_ok=True)
+# data_path = Path('/home/jneri/projects/def-depalle/jneri/data').resolve()
+# dataset = 'RWC'
+# input_path = data_path.joinpath(dataset)
+# output_path =data_path.joinpath(dataset + '_stems')
 
-#%%
+# walker = walk_files(input_path, suffix='.wav', prefix=True)
+# _walker = list(walker)[args.starting:args.starting+args.nfiles]
+# n_files = len(_walker)
 
-for (path,fname) in _walker:
-    x,fs = sf.read(path)
-    split = split_wav(x,fs)
+# output_path.mkdir(parents=True, exist_ok=True)
 
-    folders = path.split("RWC")[-1][:-4][1:]
+# #%%
 
-    folder_save = output_path.joinpath(folders)
+# for jj, (path,fname) in enumerate(_walker):
+#     print("{} / {}".format(jj+1+args.starting, n_files))
+#     x,fs = sf.read(path)
+#     split = split_wav(x,fs)
 
-    os.makedirs(folder_save,exist_ok=True)
+#     folders = path.split("RWC")[-1][:-4][1:]
 
-    for i,stem in enumerate(split):
-        sf.write(file=folder_save.joinpath(fname + '_{}'.format(i+1) + '.wav'),data=stem,samplerate=fs)
-# %%
+#     folder_save = output_path.joinpath(folders)
+
+#     os.makedirs(folder_save,exist_ok=True)
+
+#     for i,stem in enumerate(split):
+#         sf.write(file=folder_save.joinpath(fname + '_{}'.format(i+1) + '.wav'),data=stem,samplerate=fs)
+# # %%
