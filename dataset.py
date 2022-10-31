@@ -5,6 +5,7 @@ import numpy as np
 import os
 from torch import nn
 import torchaudio
+import soundfile as sf
 
 def round_pow2(x):
     return int(np.power(2,np.ceil(np.log2(x))))
@@ -34,7 +35,7 @@ class STFT(nn.Module):
         self.register_buffer("window",torch.hann_window(n_fft))
 
     def forward(self, x):
-        X = torch.stft(x, n_fft = self.n_fft, hop_length=self.hop_length, win_length=None, window=self.window, center=True, pad_mode='reflect', normalized=False, onesided=True)
+        X = torch.stft(x, n_fft = self.n_fft, hop_length=self.hop_length, win_length=None, window=self.window, center=True, pad_mode='reflect', normalized=False, onesided=True,return_complex=False)
         return X
 
 def walk_files(root, suffix, prefix=False, remove_suffix=False):
@@ -61,19 +62,29 @@ class Audioset(Dataset):
         walker = walk_files(self._path, suffix=suffix, prefix=True)
         self._walker = list(walker)
         self.n_files = len(self._walker)
+        # self.n_files = np.minimum(self.n_files,1024)
+        
+        print(root)
+        
+        self.resampler = torchaudio.transforms.Resample(orig_freq=44100,new_freq=16000)
+        self.stft = STFT(n_fft=256,hop_length=128)
 
     def __getitem__(self, n):
         path, descr = self._walker[n]
 
-        waveform, samplerate = sf.load(path)
-        
+        waveform, samplerate = torchaudio.load(path)
+        if waveform.ndim > 1:
+            waveform = waveform[0]
+        L = len(waveform)
+        starting = np.random.randint(0,L//4)
+        ending = starting + 44100*4
+        waveform = self.resampler(waveform[starting:ending])
         if self.spectrogram is True:
-            n_fft = round_pow2(samplerate*.025)
-            data = self.process_spectrogram(waveform,n_fft)
+            data = self.process_spectrogram(waveform)
         else:
             data = self.process_audio(waveform)
-
-        return data, samplerate
+            
+        return data, 16000
 
     def process_audio(self,waveform):
         if self.normalize is True:
@@ -85,13 +96,20 @@ class Audioset(Dataset):
             waveform[:,:n] = temp[:,:n]
         return waveform
 
-    def process_spectrogram(self,waveform,n_fft):
-        data = torch.norm(STFT(n_fft=n_fft)(waveform),2,-1).squeeze()
+    def process_spectrogram(self,waveform):
+        data = torch.norm(self.stft(waveform),2,-1).squeeze()
         if self.normalize is True:
-            data /= data.abs().max()
+            normalizer = data.abs().max()
+            if normalizer == 0: normalizer = 1.0
+            data /= normalizer
         if self.duration is not None:
-            data = data[:self.bins,:self.duration].unsqueeze(0)
-        return data
+            out = torch.zeros(self.bins,self.duration)
+            if data.shape[-1] < self.duration:
+                out[:,:data.shape[-1]] = data[:self.bins]
+            else:
+                out = data[:self.bins,:self.duration]
+            data = out + 0
+        return data.unsqueeze(0)
 
     def __len__(self):
         return self.n_files
@@ -165,7 +183,7 @@ class WHAMR(Dataset):
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     
-    dataset = WHAMR(root='/home/jneri/scratch/data/',duration=4)
+    dataset = Audioset(root='/home/jneri/projects/def-depalle/jneri/data/MUMS',duration=4)
     dataloader = torch.utils.data.DataLoader(dataset,batch_size=16,shuffle=True)
     x = next(iter(dataloader))
         

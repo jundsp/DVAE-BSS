@@ -18,4 +18,4 @@ pip install --no-index -r $SOURCEDIR/requirements.txt
 
 echo "Loading tensorboard and running Python script"
 # Start training, -u forces python to be unbuffered so it prints immediately
-python -u $SOURCEDIR/model.py --data-directory /home/jneri/projects/def-depalle/jneri/data --epochs 400 --job-id $SLURM_JOB_ID --output-directory /home/jneri/projects/def-depalle/jneri/output/SVAE
+python -u $SOURCEDIR/train.py --data-directory /home/jneri/projects/def-depalle/jneri/data --epochs 1000 --job-id $SLURM_JOB_ID --output-directory /home/jneri/projects/def-depalle/jneri/output/SVAE --mix-data

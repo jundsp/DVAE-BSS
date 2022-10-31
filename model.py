@@ -6,6 +6,7 @@ from utils.stft import STFT, iSTFT
 import numpy as np
 from lossfun import FreqSignalLoss
 from dataset import get_data_loaders
+from torch.nn import functional as F
 
 class DSAE(nn.Module):
     def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False):
@@ -72,7 +73,7 @@ class DSAE(nn.Module):
 
         self.likelihood = NormalLikelihood(scale_invariant=scale_invariant)
         self.criteria = nn.BCELoss(reduction='sum')
-        self.register_buffer('variance',torch.tensor(.1))
+        self.register_parameter('variance',nn.Parameter(torch.ones(1)*.1,requires_grad=False))
         self.register_parameter('smu',nn.Parameter(torch.zeros(1,num_sources,self.dimz)))
         self.register_parameter('smu0',nn.Parameter(torch.zeros(1,num_sources,self.dimz)))
         self.register_buffer('slogvar',torch.zeros(1,num_sources,self.dimz))
@@ -81,6 +82,7 @@ class DSAE(nn.Module):
         self.varmin = 1e-6
 
     def get_variance(self):
+        # If going to learn this, then there needs to be gibbs sampler, with prior to prevent it from going to zero.
         # return F.softplus(100.0*self.variance)/100.0+self.varmin
         return self.variance*1.0
 
@@ -372,138 +374,150 @@ class DCVAE(DSAE):
 def make_invariant(x,y):
     return  x * (x * y).sum() / (x * x).sum()
 
-def test(epoch=1):
-    model.eval()
-    losses = dict(kld=0.0,ell=0.0,loss=0.0)
-    for k,batch_full in enumerate(test_loader):
-        batch = batch_full[0]
-        batch = batch.view(-1,10,batch.shape[-2],batch.shape[-1])
-        x = torch.cat([batch[:,i] for i in range(batch.shape[1])],-1)
-        for i in range(x.shape[0]):
-            x[i] = torch.roll(x[i],torch.randint(0,14,(1,)).item(),-1)
-        x = x[:,:,:dimt].to(device)
-        if nsrc == 2:
-            x = .5*(x[::2] + x[1::2])
-
-        recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
-        ell, kld = model.loss_function(x,recon_x, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
-        loss = ell + kld
-        
-        losses['kld']+=(kld.item())
-        losses['ell']+=(ell.item())
-        losses['loss']+=(loss.item())
-    for l in losses:
-        losses[l] /= k
-
-    print(' Test ==> Epoch {} \t KLD = {:4.2f} \t ELL = {:4.2f} \t Loss = {:4.2f}'.format(epoch+1,losses['kld'],losses['ell'],losses['loss']))
-    
-    
-    X = x.cpu().detach().numpy()
-    X_hat = recon_x.cpu().detach().numpy()
-    S_hat = recon_s.cpu().detach().numpy()
-    kwds = dict(cmap='jet',interpolation='none',vmin=0,vmax=2)
-    plt.figure(figsize=(6,10))
-    plt.subplot(411)
-    plt.imshow(X[0],**kwds)
-    plt.title('epoch = {}'.format(epoch+1))
-    plt.subplot(412)
-    plt.imshow(X_hat[0],**kwds)
-    plt.subplot(413)
-    plt.imshow(S_hat[0,0],**kwds)
-    if nsrc == 2:
-        plt.subplot(414)
-        plt.imshow(S_hat[0,1],**kwds)
-    
-    plt.savefig(args.output_directory + '/mnist_test_.1_{}.png'.format(nsrc))
-    plt.close()
-
-    s, z, h = model.sample(N=50,device=device)
-    S = s[0,:].cpu().detach().numpy()
-
-    plt.figure(figsize=(6,4))
-    plt.imshow(S[0],**kwds)
-    plt.title('epoch = {}'.format(epoch+1))
-    plt.savefig(args.output_directory + '/mnist_sampled_.1_{}.png'.format(nsrc))
-    plt.close()
-
-#%%
-from torch import optim
-from argparser import parser
-import os
-from dataset import WHAMR
-import matplotlib.pyplot as plt
-import soundfile as sf
-
-args = parser.parse_args()
-args.output_directory = os.path.join(args.output_directory, args.job_id)
-print(args.output_directory)
-if not os.path.exists(args.output_directory):
-    print("creating path for outputs")
-    os.makedirs(args.output_directory)
-
-torch.manual_seed(1)
-
-args.cuda = not args.no_cuda and torch.cuda.is_available()
-device = torch.device("cuda" if args.cuda else "cpu")
-kwds = {'num_workers': args.num_workers, 'pin_memory': True} if args.cuda else {}
-print(device)
-
-# AUDIO
-# s,fs = sf.read('/Users/julian/Documents/MATLAB/sounds/clar.wav')
-# stft = STFT(fs=fs,winlen=.02,hopfrac=.5,nfft=256,normalize=False)
-# x = stft(torch.from_numpy(s).view(1,-1)).float()
-# # x = torch.concat([x[:,:,:,0],x[:,:,:,1]],-1)
-# x = (x**2.0).sum(-1) ** .5
-# x = x.transpose(-2,-1)
-# # x = x / x.max()
-# x = x[:,:,:32]
-# dimx = 129
-
-kwds = {}
-train_loader, test_loader = get_data_loaders(args.data_directory,200,kwds)
-
-dimx = 28
-dimt = 256
-nsrc = 2
-
-model = DSAE(dimx=dimx,dimz=32,dimh=128,dimg=128,num_sources=nsrc,scale_invariant=True)
-model = model.to(device)
-
-optimizer = optim.Adam(params=model.parameters(),lr=2e-4)
-
-#%%
-for epoch in range(args.epochs):
-    model.train()
-    losses = dict(kld=0.0,ell=0.0,loss=0.0)
-    for k,batch_full in enumerate(train_loader):
-        batch = batch_full[0]
-        batch = batch.view(-1,10,batch.shape[-2],batch.shape[-1])
-        x = torch.cat([batch[:,i] for i in range(batch.shape[1])],-1)
-        for i in range(x.shape[0]):
-            x[i] = torch.roll(x[i],torch.randint(0,14,(1,)).item(),-1)
-        x = x[:,:,:dimt].to(device)
-        if nsrc == 2:
-            x = .5*(x[::2] + x[1::2])
+if __name__ == "__main__":
 
 
-        optimizer.zero_grad()
-        recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
-        ell, kld = model.loss_function(x,recon_x, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
-        loss = ell + kld
-        loss.backward()
-        optimizer.step()
-        
-        
-        losses['kld']+=(kld.item())
-        losses['ell']+=(ell.item())
-        losses['loss']+=(loss.item())
-        
-    for l in losses:
-        losses[l] /= k
+    def test(epoch=1):
+        model.eval()
+        losses = dict(kld=0.0,ell=0.0,loss=0.0)
+        for k,batch_full in enumerate(test_loader):
+            batch = batch_full[0]
+            batch = batch.view(-1,10,batch.shape[-2],batch.shape[-1])
+            x = torch.cat([batch[:,i] for i in range(batch.shape[1])],-1)
+            for i in range(x.shape[0]):
+                x[i] = torch.roll(x[i],torch.randint(0,14,(1,)).item(),-1)
+            x = x[:,:,:dimt].to(device)
+            if nsrc == 2:
+                x = .5*(x[::2] + x[1::2])
 
-    print(' Train ==> Epoch {} \t KLD = {:4.2f} \t ELL = {:4.2f} \t Loss = {:4.2f}'.format(epoch+1,losses['kld'],losses['ell'],losses['loss']))
+            recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
+            ell, kld = model.loss_function(x,recon_x, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
+            loss = ell + kld
             
-    test(epoch)
+            losses['kld']+=(kld.item())
+            losses['ell']+=(ell.item())
+            losses['loss']+=(loss.item())
+        for l in losses:
+            losses[l] /= k
+
+        print(' Test ==> Epoch {} \t KLD = {:4.2f} \t ELL = {:4.2f} \t Loss = {:4.2f}'.format(epoch+1,losses['kld'],losses['ell'],losses['loss']))
+        
+        # Mask estimate
+        M = recon_s * (x /  recon_s.sum(1)).unsqueeze(1)
+        
+        X = x.cpu().detach().numpy()
+        X_hat = recon_x.cpu().detach().numpy()
+        S_hat = recon_s.cpu().detach().numpy()
+        M = M.cpu().detach().numpy()
+        kwds = dict(cmap='jet',interpolation='none',vmin=0,vmax=2)
+        plt.figure(figsize=(10,7))
+        plt.subplot(611)
+        plt.imshow(X[0],**kwds)
+        plt.title('epoch = {}'.format(epoch+1))
+        plt.subplot(612)
+        plt.imshow(X_hat[0],**kwds)
+        plt.subplot(613)
+        plt.imshow(S_hat[0,0],**kwds)
+        plt.subplot(615)
+        plt.imshow(M[0,0],**kwds)
+        if nsrc == 2:
+            plt.subplot(614)
+            plt.imshow(S_hat[0,1],**kwds)
+            plt.subplot(616)
+            plt.imshow(M[0,1],**kwds)
+        
+        plt.savefig(args.output_directory + '/test.png')
+        plt.close()
+
+        s, z, h = model.sample(N=50,device=device)
+        S = s[0,:].cpu().detach().numpy()
+
+        plt.figure(figsize=(10,4))
+        plt.imshow(S[0],**kwds)
+        plt.title('epoch = {}'.format(epoch+1))
+        plt.savefig(args.output_directory + '/sampled.png')
+        plt.close()
+
+    #%%
+    from torch import optim
+    from argparser import parser
+    import os
+    from dataset import WHAMR
+    import matplotlib.pyplot as plt
+    import soundfile as sf
+
+    args = parser.parse_args()
+    args.output_directory = os.path.join(args.output_directory, args.job_id)
+    print(args.output_directory)
+    if not os.path.exists(args.output_directory):
+        print("creating path for outputs")
+        os.makedirs(args.output_directory)
+
+    torch.manual_seed(1)
+
+    args.cuda = not args.no_cuda and torch.cuda.is_available()
+    device = torch.device("cuda" if args.cuda else "cpu")
+    kwds = {'num_workers': args.num_workers, 'pin_memory': True} if args.cuda else {}
+    print(device)
+
+    # AUDIO
+    # s,fs = sf.read('/Users/julian/Documents/MATLAB/sounds/clar.wav')
+    # stft = STFT(fs=fs,winlen=.02,hopfrac=.5,nfft=256,normalize=False)
+    # x = stft(torch.from_numpy(s).view(1,-1)).float()
+    # # x = torch.concat([x[:,:,:,0],x[:,:,:,1]],-1)
+    # x = (x**2.0).sum(-1) ** .5
+    # x = x.transpose(-2,-1)
+    # # x = x / x.max()
+    # x = x[:,:,:32]
+    # dimx = 129
+
+    kwds = {}
+    train_loader, test_loader = get_data_loaders(args.data_directory,400,kwds)
+
+    dimx = 28
+    dimt = 256
+    nsrc = 2
+
+    model = DSAE(dimx=dimx,dimz=32,dimh=128,dimg=128,num_sources=nsrc,scale_invariant=True)
+    model = model.to(device)
+
+    optimizer = optim.Adam(params=model.parameters(),lr=2e-4)
+
+    #%%
+    for epoch in range(args.epochs):
+        model.train()
+        losses = dict(kld=0.0,ell=0.0,loss=0.0)
+        for k,batch_full in enumerate(train_loader):
+            batch = batch_full[0]
+            batch = batch.view(-1,10,batch.shape[-2],batch.shape[-1])
+            x = torch.cat([batch[:,i] for i in range(batch.shape[1])],-1)
+            for i in range(x.shape[0]):
+                x[i] = torch.roll(x[i],torch.randint(0,14,(1,)).item(),-1)
+            x = x[:,:,:dimt].to(device)
+            if nsrc == 2:
+                x = .5*(x[::2] + x[1::2])
 
 
-# Go to the train module now, and use a colorbar. Save the models as well with a unique name or create a folder that is using the slurm name.
+            optimizer.zero_grad()
+            recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(x)
+            ell, kld = model.loss_function(x,recon_x, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
+            loss = ell + kld
+            loss.backward()
+            optimizer.step()
+            
+            
+            losses['kld']+=(kld.item())
+            losses['ell']+=(ell.item())
+            losses['loss']+=(loss.item())
+            
+        for l in losses:
+            losses[l] /= k
+
+        print(' Train ==> Epoch {} \t KLD = {:4.2f} \t ELL = {:4.2f} \t Loss = {:4.2f}'.format(epoch+1,losses['kld'],losses['ell'],losses['loss']))
+                
+        test(epoch)
+        
+        # print('variance = {:4.4f}'.format(model.get_variance().item()))
+
+
+    # Go to the train module now, and use a colorbar. Save the models as well with a unique name or create a folder that is using the slurm name.
