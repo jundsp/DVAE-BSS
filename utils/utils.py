@@ -12,3 +12,4 @@ def db2mag(x):
 def mag2db(x):
     return 20.0*torch.log10(torch.abs(x))
 
+
