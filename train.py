@@ -101,11 +101,13 @@ def process_data(data,duration=256):
 def train(epoch):
     model.train()
     info = {'loss':[],'ell':[],'kld':[]}
-    for batch_idx, (data) in enumerate(train_loader):
+    for batch_idx, (data,_) in enumerate(train_loader):
         data = pipeline(data.to(device))
 
         optimizer.zero_grad()
         recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(data)
+        print(recon_x.shape)
+        print(data.shape)
         ell, kld = model.loss_function(data,recon_x, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
         loss = ell + kld
         loss.backward()
@@ -128,7 +130,7 @@ def test(epoch):
     model.eval()
     info = {'loss':[],'ell':[],'kld':[]}
     with torch.no_grad():
-        for batch_idx, (data) in enumerate(test_loader):
+        for batch_idx, (data,_) in enumerate(test_loader):
             data = pipeline(data.to(device))
 
             recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(data)
@@ -159,26 +161,26 @@ if __name__ == "__main__":
         dim_data = (32,32)
         transform = transforms.Compose([transforms.CenterCrop(size=dim_data),transforms.RandomAffine(degrees=0,translate=(0.2,0.2)),transforms.ToTensor()])
         train_set = datasets.MNIST(args.data_directory, train=True, transform=transform, download=True)
-        test_set = datasets.MNIST(args.data_directory, train=True, transform=transform, download=True)
+        test_set = datasets.MNIST(args.data_directory, train=False, transform=transform, download=True)
+        pipeline = ImagePipeline(n_src=args.num_sources,duration=args.duration)
 
     if args.dataset == 'MUMS':
         dim_data = (128,args.duration)
         train_set = Audioset(args.data_directory + '/MUMS/DVDs', spectrogram=True, duration=dim_data[1], bins=dim_data[0])
         test_set = Audioset(args.data_directory + '/MUMS/DVDs/WOODWINDS/SAXOPHONES/', spectrogram=True, duration=dim_data[1], bins=dim_data[0])
-        
-    print(args.dataset)
-        
+                
     if args.dataset == 'RWC':
         nfft = 512
         dim_data = (nfft//2+1,args.duration)
         transform = transforms.Compose([Shift(shift_amount=.1)])
         train_set = Audioset(root=args.data_directory,path_csv='rwc_dataset/validate.csv',duration=6,nsrc=2,transform=transform,)
         test_set =  Audioset(root=args.data_directory,path_csv='rwc_dataset/test.csv',duration=6,nsrc=2,transform=transform,)
+        pipeline = AudioPipeline(n_time=args.duration,n_fft=nfft,hop_length=64,compression=1)
         
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=True, **kwargs)
     
-    pipeline = AudioPipeline(n_time=args.duration,n_fft=nfft,hop_length=128,compression=.5).to(device)
+    pipeline = pipeline.to(device)
     
     print("Trainset -> found {} files.".format(len(train_set)))
     print("Testset -> found {} files.".format(len(test_set)))
@@ -206,7 +208,7 @@ if __name__ == "__main__":
 
     model_name = ('{}/svae_{}_K{}_L{}_{}_D{}.pt').format(path_saves,args.dataset,str(args.num_sources),str(args.num_layers),args.net_type,args.latent_dim)
 
-    model = DSAE(
+    model = DCAE(
         dimx=dimx,
         dimz=dimz,
         dimh=dimh,
@@ -215,9 +217,11 @@ if __name__ == "__main__":
         net_type=args.net_type,
         num_layers=args.num_layers,
         scale_invariant=True,
-        layer_channels=(64,128)
+        layer_channels=(32,64,128)
         ).to(device)
-
+    
+    print(model)
+    
     optimizer = optim.Adam(params=model.parameters(),lr=lr)
             
     for epoch in range(1,args.epochs+1):

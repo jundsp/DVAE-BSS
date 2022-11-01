@@ -15,8 +15,6 @@ class DSAE(nn.Module):
         self.num_sources = num_sources
         self.num_layers = num_layers
         
-        self.dec_chan = 128
-
         self.gru_generate = nn.LSTM(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
         self.gru_infer = nn.LSTM(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
 
@@ -86,7 +84,7 @@ class DSAE(nn.Module):
 
     def feature_encoder(self,x):
         gx = self.Encoder(x)
-        return gx.view(gx.shape[0],-1,gx.size(-1))
+        return gx.view(-1,self.dimg,gx.size(-1))
 
     def feature_decoder(self,z):
         return self.Decoder(z)
@@ -190,8 +188,7 @@ class DSAE(nn.Module):
 
 
 class DCAE(DSAE):
-    def __init__(self, dimx, dimz, chans=64, num_sources=1,
-    num_layers=1, scale_invariant=False, layer_channels=None):
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None):
         super(DCAE, self).__init__(dimx=dimx,dimz=dimz)
 
         if layer_channels is None:
@@ -251,7 +248,7 @@ class DCAE(DSAE):
             nn.Tanh(),
             )
         
-        self.Encoder = StridedEncoder(1,self.conv_channels,layer_channels=layer_channels)
+        self.Encoder = StridedEncoder(1,self.conv_channels*self.num_sources,layer_channels=layer_channels)
         self.Decoder = StridedDecoder(self.conv_channels,1,layer_channels=layer_channels)
 
         self.activation = nn.Softplus()
@@ -268,12 +265,15 @@ class DCAE(DSAE):
         self.varmin = 1e-6
 
     def feature_encoder(self,x):
+        if x.ndim < 4:
+            x = x.unsqueeze(1)
         gx = self.Encoder(x)
-        return gx.view(gx.shape[0],-1,gx.size(-1))
+        return gx.view(-1,self.dimg,gx.size(-1))
 
     def feature_decoder(self,z):
         z = z.view(z.shape[0],self.conv_channels,-1,z.shape[-1])
-        return self.Decoder(z)
+        y = self.Decoder(z)
+        return y
 
 '''
 Encoder/Decoders for Features.
@@ -471,19 +471,13 @@ def make_invariant(x,y):
 if __name__ == "__main__":
     enc = StridedEncoder(input_channels=1,output_channels=32)
     dec = StridedDecoder(input_channels=32,output_channels=1)
-
-    x = torch.randn(4,1,257,129)
+    
+    dimx = 32
+    x = torch.randn(4,1,dimx,129)
     z = enc(x)
     y = dec(z)
 
-    # print(x.shape)
-    # print(z.shape)
-    # print(y.shape)
-
-    # model = DSAE(dimx=257,dimz=32)
-    # print(model(x.squeeze(1))[0].shape)
-
-    model = DCAE(dimx=257,dimz=32)
+    model = DCAE(dimx=dimx,dimz=32)
     y = model(x)[0]
 
     print(x.shape)

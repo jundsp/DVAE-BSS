@@ -177,6 +177,23 @@ class WHAMR(Dataset):
     def __len__(self):
         return self.n_files
 
+
+class ImagePipeline(torch.nn.Module):
+    def __init__(
+        self,
+        n_src = 1,
+        duration = 128,
+    ):
+        super().__init__()
+        self.n_src = n_src
+        self.chain = Chain(size=duration)
+
+    def forward(self, image: torch.Tensor) -> torch.Tensor:
+        data = self.chain(image)
+        n = data.shape[0]
+        idx = torch.randperm(n)
+        return data[idx] + data
+    
 class AudioPipeline(torch.nn.Module):
     def __init__(
         self,
@@ -199,8 +216,6 @@ class AudioPipeline(torch.nn.Module):
         )
         
         self.crop = Crop(size=n_time)
-        
-
 
     def forward(self, waveform: torch.Tensor) -> torch.Tensor:
         spec = self.spec(waveform) ** self.compression
@@ -240,6 +255,22 @@ class Crop(object):
         else:
             sample = sample.transpose(0,-1)[:self.size].transpose(0,-1)
         return sample
+    
+class Chain(object):
+    def __init__(self,size) -> None:
+        self.size = size
+        
+    def __call__(self,input):
+        n = input.shape[0]
+        
+        k = self.size // input.shape[-1]
+        m = n // k
+        data = torch.zeros(m,input.shape[-2],self.size,dtype=input.dtype, layout=input.layout, device=input.device)
+        for mm in range(m):
+            idx = mm*k
+            data[mm] = torch.cat([input[i+idx] for i in range(k)],-1)
+                            
+        return data
     
 #%%
 if __name__ == "__main__":
