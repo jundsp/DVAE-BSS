@@ -52,7 +52,7 @@ def walk_files(root, suffix, prefix=False, remove_suffix=False):
                 yield fname, descr
 
 class Audioset(Dataset):
-    def __init__(self,root,path_csv,duration=4,normalize=True,suffix='.wav',samplerate=16000,nsrc=2,transform=None):
+    def __init__(self,root,path_csv,duration=4,normalize=True,suffix='.wav',samplerate=16000,nsrc=2,transform=None,augment_levels=True):
         self._path = root
         self.duration = duration
         self.normalize = normalize
@@ -60,6 +60,7 @@ class Audioset(Dataset):
         self.samplerate = samplerate
         self.samples = int(duration*samplerate)
         self._walker = pd.read_csv(os.path.join(root,path_csv),header=None)[0].tolist()
+        self.augment_levels = augment_levels
 
         # walker = walk_files(self._path, suffix=suffix, prefix=True)
         # self._walker = list(walker)
@@ -74,9 +75,13 @@ class Audioset(Dataset):
         waveform, samplerate = torchaudio.load(os.path.join(self._path,path))
         if waveform.ndim > 1:
             waveform = waveform[0]
-        
+            
         if samplerate != self.samplerate:
-            waveform = torchaudio.functional.resample(waveform,orig_freq=samplerate,new_freq=self.samplerate)
+            try:
+                waveform = torchaudio.functional.resample(waveform,orig_freq=samplerate,new_freq=self.samplerate)
+            except:
+                print("Could not resample!")
+                print(path)
         if normalize:
             waveform /= waveform.abs().max()
                         
@@ -92,7 +97,11 @@ class Audioset(Dataset):
         return data
     
     def _mix_audio(self,x):
-        return x.sum(0)
+        if self.augment_levels:
+            alpha = torch.rand(self.nsrc,device=x.device,dtype=x.dtype)
+            alpha /= alpha.sum()
+            x = x * alpha.view(-1,1)
+        return x.sum(0), x
         
                 
     def __getitem__(self, n):
@@ -105,9 +114,9 @@ class Audioset(Dataset):
             out.append(self._load_audio(k[i]))
         
         sources = torch.stack(out,0)
-        mix = self._mix_audio(sources)
+        mix, sources = self._mix_audio(sources)
         
-        return mix
+        return mix, sources
 
     def __len__(self):
         return self.n_files
@@ -183,27 +192,37 @@ class ImagePipeline(torch.nn.Module):
         self,
         n_src = 1,
         duration = 128,
+        shift=0.0,
     ):
         super().__init__()
         self.n_src = n_src
         self.chain = Chain(size=duration)
+        self.shift = Shift(shift_amount=shift)
 
     def forward(self, image: torch.Tensor) -> torch.Tensor:
         data = self.chain(image)
-        n = data.shape[0]
-        idx = torch.randperm(n)
-        return data[idx] + data
+        if self.n_src > 1:
+            n = data.shape[0]
+            idx = np.arange(n) + 1
+            if n > 1:
+                idx[-1] = 0
+            data = self.shift(data[idx]) + self.shift(data)
+        else:
+            data = self.shift(data)
+        return data
     
 class AudioPipeline(torch.nn.Module):
     def __init__(
         self,
         n_fft=512,
         n_time=256,
+        duration = None,
         hop_length=256,
         stretch_factor=0.8,
         compression=1.0,
     ):
         super().__init__()
+        if duration is None: duration = n_time
         
         self.affine = transforms.RandomAffine(degrees=0,translate=(0.0,0.0))
         self.spec = torchaudio.transforms.Spectrogram(n_fft=n_fft, power=1,normalized=True, hop_length=hop_length)
@@ -216,10 +235,12 @@ class AudioPipeline(torch.nn.Module):
         )
         
         self.crop = Crop(size=n_time)
+        self.chain = Chain(size=duration)
 
     def forward(self, waveform: torch.Tensor) -> torch.Tensor:
         spec = self.spec(waveform) ** self.compression
         spec = self.crop(spec)
+        spec = self.chain(spec)
         return spec
 
 class Shift(object):
@@ -233,12 +254,19 @@ class Shift(object):
         
         if sample.ndim > 1:
             sample = sample.transpose(0,-1)
-        max_shift = self.shift_amount * sample.shape[0]
-        tau = np.random.randint(int(max_shift)+1)
+            
+        max_shift = int(self.shift_amount * sample.shape[0])
+        tau = np.random.randint(max_shift+1)
+        direction = np.random.randint(2)
         out = sample.clone()
         if tau > 0:
-            out[tau:] = sample[:-tau]
-            out[:tau] = 0.0
+            if direction == 1:
+                out[tau:] = sample[:-tau]
+                out[:tau] = 0
+            elif direction == 0:
+                out[:-tau] = sample[tau:]
+                out[-tau:] = 0
+            
         if sample.ndim > 1:
             out = out.transpose(0,-1)
         return out
@@ -265,10 +293,11 @@ class Chain(object):
         
         k = self.size // input.shape[-1]
         m = n // k
+        size_in = k*input.shape[-1]
         data = torch.zeros(m,input.shape[-2],self.size,dtype=input.dtype, layout=input.layout, device=input.device)
         for mm in range(m):
             idx = mm*k
-            data[mm] = torch.cat([input[i+idx] for i in range(k)],-1)
+            data[mm,:,:size_in] = torch.cat([input[i+idx] for i in range(k)],-1)
                             
         return data
     

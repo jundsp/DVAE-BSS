@@ -9,12 +9,13 @@ parser.add_argument('--save-interval', type=int, default=1, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--num-workers', type=int, default=4, metavar='N',
                     help='number of epochs to train (default: 10)')
-parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+parser.add_argument('--log-interval', type=int, default=100, metavar='N',
                     help='number of batches to wait for printing')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--mix-data', action='store_true', default=False,
                     help='enables CUDA training')
+parser.add_argument('--conv2d', action='store_true', default=False)
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--dataset', type=str, default='MNIST', metavar='fname',
@@ -41,3 +42,4 @@ parser.add_argument('--output-directory', type=str, default='results', metavar='
                     help='Folder containing the spectrogram data')
 parser.add_argument('--job-id', type=str, default='local', metavar='fname',
                     help='Slurm job id')
+parser.add_argument('--compression', type=float, default=1)

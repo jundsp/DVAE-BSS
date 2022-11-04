@@ -9,52 +9,17 @@ from dataset import get_data_loaders
 from torch.nn import functional as F
 
 class DSAE(nn.Module):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None):
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None, averaged_loss=True):
         super(DSAE, self).__init__()
         self.dimx, self.dimz, self.dimh, self.dimg = dimx, dimz, dimh, dimg
         self.num_sources = num_sources
         self.num_layers = num_layers
+        self.averaged_loss = averaged_loss
         
         self.gru_generate = nn.LSTM(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
         self.gru_infer = nn.LSTM(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
 
-        self.mu_q = nn.Sequential(
-            nn.Linear(dimg,chans),
-            nn.ReLU(),
-            nn.Linear(chans,dimz),
-            )
-        self.logvar_q = nn.Sequential(
-            nn.Linear(dimg,chans),
-            nn.ReLU(),
-            nn.Linear(chans,dimz),
-            )
-
-        self.mu0_q = nn.Sequential(
-            nn.Linear(dimg,chans),
-            nn.ReLU(),
-            nn.Linear(chans,dimz),
-            )
-        self.logvar0_q = nn.Sequential(
-            nn.Linear(dimg,chans),
-            nn.ReLU(),
-            nn.Linear(chans,dimz),
-            )
-
-        self.mu_p = nn.Sequential(
-            nn.Linear(dimh,chans),
-            nn.ReLU(),
-            nn.Linear(chans,dimz),
-            )
-        self.logvar_p = nn.Sequential(
-            nn.Linear(dimh,chans),
-            nn.ReLU(),
-            nn.Linear(chans,dimz),
-            )
-
-        self.transition_z = nn.Sequential(
-            nn.Linear(self.dimz,self.dimh),
-            nn.Tanh(),
-            )
+        self.make_transition_nets(dimg,chans,dimz,dimh)
 
         self.net_type = net_type
         
@@ -76,6 +41,45 @@ class DSAE(nn.Module):
         self.register_buffer('slogvar0',torch.zeros(1,num_sources,self.dimz))
 
         self.varmin = 1e-6
+        
+    def make_transition_nets(self,dimg,chans,dimz,dimh):
+        self.mu_q = nn.Sequential(
+            nn.Linear(dimg,chans),
+            nn.LeakyReLU(),
+            nn.Linear(chans,dimz),
+            )
+        self.logvar_q = nn.Sequential(
+            nn.Linear(dimg,chans),
+            nn.LeakyReLU(),
+            nn.Linear(chans,dimz),
+            )
+
+        self.mu0_q = nn.Sequential(
+            nn.Linear(dimg,chans),
+            nn.LeakyReLU(),
+            nn.Linear(chans,dimz),
+            )
+        self.logvar0_q = nn.Sequential(
+            nn.Linear(dimg,chans),
+            nn.LeakyReLU(),
+            nn.Linear(chans,dimz),
+            )
+
+        self.mu_p = nn.Sequential(
+            nn.Linear(dimh,chans),
+            nn.LeakyReLU(),
+            nn.Linear(chans,dimz),
+            )
+        self.logvar_p = nn.Sequential(
+            nn.Linear(dimh,chans),
+            nn.LeakyReLU(),
+            nn.Linear(chans,dimz),
+            )
+
+        self.transition_z = nn.Sequential(
+            nn.Linear(self.dimz,self.dimh),
+            nn.LeakyReLU(),
+            )
 
     def get_variance(self):
         # If going to learn this, then there needs to be gibbs sampler, with prior to prevent it from going to zero.
@@ -84,13 +88,13 @@ class DSAE(nn.Module):
 
     def feature_encoder(self,x):
         gx = self.Encoder(x)
-        return gx.view(-1,self.dimg,gx.size(-1))
+        return gx.view(-1,self.dimg,gx.size(-1)).transpose(-2,-1)
 
     def feature_decoder(self,z):
         return self.Decoder(z)
 
     def encode(self,x):
-        gx = self.feature_encoder(x).transpose(-2,-1)
+        gx = self.feature_encoder(x)
         g0 = torch.zeros(2*self.num_layers,gx.size(0),self.dimg,device=x.device)
         c0 = torch.zeros(2*self.num_layers,gx.size(0),self.dimg,device=x.device)
         g,_ = self.gru_infer(gx,(g0,c0))
@@ -159,21 +163,25 @@ class DSAE(nn.Module):
 
     def sample(self,N=10,M=1,device='cpu'):
         z, h = self.sample_latent(N=N,M=M,device=device)
-        
         s = self.decode(z)
         s = s.view(-1,self.num_sources,s.size(-2),s.size(-1))
         return s, z, h
 
-    def loss_function(self,x,mu_x,mu,logvar,mu_prior,logvar_prior, mu0, logvar0 ):
+    def loss_function(self,x,output):
+        mu_x,mu,logvar,mu_prior,logvar_prior, mu0, logvar0 = output['recon_x'], output['mu_q'], output['logvar_q'],output['mu_p'], output['logvar_p'], output['mu0_q'], output['logvar0_q']
         n = x.size(0)
+        N = n + 0
+        if self.averaged_loss is True:
+            N = torch.numel(x)
+        N = float(N)
+            
         # Si-SDR? scale the target... but it is the mixture.
-        ell = self.likelihood(x, mu_x, var=self.get_variance()) / n
-        # ell = self.criteria(mu_x,x) / n        
-        kld = KLD(mu,logvar,prior_mean=mu_prior,prior_logvar=logvar_prior) / n
+        ell = self.likelihood(x, mu_x, var=self.get_variance()) 
+        kld = KLD(mu,logvar,prior_mean=mu_prior,prior_logvar=logvar_prior) 
         prior_mean = self.batch_and_source(self.smu0,n)
         prior_logvar = self.batch_and_source(self.slogvar0,n)
-        kld += KLD(mu0,logvar0,prior_mean=prior_mean,prior_logvar=prior_logvar) / n
-        return ell , kld
+        kld += KLD(mu0,logvar0,prior_mean=prior_mean,prior_logvar=prior_logvar)
+        return ell / N , kld / N
 
     def forward(self, x):
         mu_q, logvar_q, mu0_q, logvar0_q = self.encode(x)
@@ -184,23 +192,37 @@ class DSAE(nn.Module):
         mu_s = mu_s.view(-1,self.num_sources,mu_s.size(-2),mu_s.size(-1))
         recon_s = mu_s
         recon_x = recon_s.sum(1)
-        return recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q
+        
+        out = {
+            'recon_x': recon_x, 
+            'recon_s': recon_s, 
+            'mu_q': mu_q, 
+            'logvar_q': logvar_q, 
+            'mu_p': mu_p, 
+            'logvar_p': logvar_p, 
+            'mu0_q': mu0_q, 
+            'logvar0_q': logvar0_q
+            }
+        return out
 
 
 class DCAE(DSAE):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None):
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None,kernel_size=(3,2),stride=(2,1),padding=(1,0)):
         super(DCAE, self).__init__(dimx=dimx,dimz=dimz)
 
         if layer_channels is None:
             layer_channels = (64,128)
 
-        self.conv_channels = 8
+        self.conv_channels = layer_channels[-1]
 
         n_feature_layers = len(layer_channels)
         self.freq_features = dimx // (2**(n_feature_layers+1)) + (dimx % 2) 
-        dimg = self.freq_features * self.conv_channels
-        dimh = dimg
-        dimz = dimh
+        self.encoded_features = self.freq_features * self.conv_channels
+        self.n_feat_encoded = dimg * num_sources
+        # dimh = dimg
+        # dimz = dimh
+        # chans = dimg
+        chans = (dimz + dimg) // 2
         dimx = 1
         self.dimx, self.dimz, self.dimh, self.dimg = dimx, dimz, dimh, dimg
         self.num_sources = num_sources
@@ -208,50 +230,24 @@ class DCAE(DSAE):
         
         self.gru_generate = nn.LSTM(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
         self.gru_infer = nn.LSTM(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
-
-        self.mu_q = nn.Sequential(
-            nn.Linear(dimg,chans),
-            nn.ReLU(),
-            nn.Linear(chans,dimz),
-            )
-
-        self.logvar_q = nn.Sequential(
-            nn.Linear(dimg,chans),
-            nn.ReLU(),
-            nn.Linear(chans,dimz),
-            )
-
-        self.mu0_q = nn.Sequential(
-            nn.Linear(dimg,chans),
-            nn.ReLU(),
-            nn.Linear(chans,dimz),
-            )
-        self.logvar0_q = nn.Sequential(
-            nn.Linear(dimg,chans),
-            nn.ReLU(),
-            nn.Linear(chans,dimz),
-            )
-
-        self.mu_p = nn.Sequential(
-            nn.Linear(dimh,chans),
-            nn.ReLU(),
-            nn.Linear(chans,dimz),
-            )
-        self.logvar_p = nn.Sequential(
-            nn.Linear(dimh,chans),
-            nn.ReLU(),
-            nn.Linear(chans,dimz),
-            )
-
-        self.transition_z = nn.Sequential(
-            nn.Linear(self.dimz,self.dimh),
-            nn.Tanh(),
-            )
         
-        self.Encoder = StridedEncoder(1,self.conv_channels*self.num_sources,layer_channels=layer_channels)
-        self.Decoder = StridedDecoder(self.conv_channels,1,layer_channels=layer_channels)
+        self.gru_feature = nn.LSTM(self.n_feat_encoded,self.n_feat_encoded,num_layers=self.num_layers,bidirectional=False,batch_first=True)
 
-        self.activation = nn.Softplus()
+        self.make_transition_nets(dimg,chans,dimz,dimh)
+        self.fc_encoder = nn.Sequential(
+            nn.Conv1d(self.encoded_features,self.dimg*self.num_sources,kernel_size=1,stride=1,padding=0),
+            nn.LeakyReLU(),
+        )
+        self.fc_decoder = nn.Sequential(
+            nn.ConvTranspose1d(self.dimz,self.encoded_features,kernel_size=1,stride=1,padding=0),
+            nn.LeakyReLU(),
+            nn.BatchNorm1d(self.encoded_features),
+        )
+        
+        kwds_feature_conv = dict(kernel_size=kernel_size,stride=stride,padding=padding)
+        self.Encoder = StridedEncoder(1,self.conv_channels,layer_channels=layer_channels,**kwds_feature_conv)
+        self.Decoder = StridedDecoder(self.conv_channels,1,layer_channels=layer_channels,**kwds_feature_conv)
+
         self.activation = nn.Sigmoid()
 
         self.likelihood = NormalLikelihood(scale_invariant=scale_invariant)
@@ -263,14 +259,23 @@ class DCAE(DSAE):
         self.register_buffer('slogvar0',torch.zeros(1,num_sources,self.dimz))
 
         self.varmin = 1e-6
-
+        
     def feature_encoder(self,x):
         if x.ndim < 4:
             x = x.unsqueeze(1)
         gx = self.Encoder(x)
-        return gx.view(-1,self.dimg,gx.size(-1))
+        gx = gx.view(-1,self.encoded_features,gx.shape[-1])
+        gx = self.fc_encoder(gx)
+        # gx = gx.view(-1,self.n_feat_encoded,gx.size(-1)).transpose(-2,-1)
+        # g0 = torch.zeros(self.num_layers,gx.size(0),self.n_feat_encoded,device=x.device)
+        # c0 = torch.zeros(self.num_layers,gx.size(0),self.n_feat_encoded,device=x.device)
+        # gx,_ = self.gru_feature(gx,(g0,c0))
+        # gx = gx.transpose(-2,-1)
+        gx = gx.view(-1,self.dimg,gx.shape[-1]).transpose(-2,-1)
+        return gx
 
     def feature_decoder(self,z):
+        z = self.fc_decoder(z)
         z = z.view(z.shape[0],self.conv_channels,-1,z.shape[-1])
         y = self.Decoder(z)
         return y
@@ -324,7 +329,7 @@ class StridedEncoder(nn.Module):
         mlist.append(Conv2dLayer(input_channels,layer_channels[0],**kwds))
         for ii in range(len(layer_channels)-1):
             mlist.append(Conv2dLayer(layer_channels[ii],layer_channels[ii+1],**kwds))
-        mlist.append(Conv2dLayer(layer_channels[-1],output_channels,batchnorm=False,**kwds))
+        mlist.append(Conv2dLayer(layer_channels[-1],output_channels,batchnorm=True,**kwds))
 
         self.Network = nn.Sequential(*mlist)
 
@@ -336,15 +341,15 @@ class StridedDecoder(nn.Module):
         super(StridedDecoder, self).__init__()
 
         if layer_channels is None: 
-            layer_channels = (128,64,32)
+            layer_channels = (32,64,128)
 
         kwds = dict(kernel_size=kernel_size,stride=stride,padding=padding)
 
         mlist = nn.ModuleList()
-        mlist.append(ConvTranspose2dLayer(input_channels,layer_channels[0],**kwds))
-        for ii in range(len(layer_channels)-1):
-            mlist.append(ConvTranspose2dLayer(layer_channels[ii],layer_channels[ii+1],**kwds))
-        mlist.append(ConvTranspose2dLayer(layer_channels[-1],output_channels,batchnorm=False,**kwds))
+        mlist.append(ConvTranspose2dLayer(input_channels,layer_channels[-1],**kwds))
+        for ii in range(len(layer_channels)-2,-1,-1):
+            mlist.append(ConvTranspose2dLayer(layer_channels[ii+1],layer_channels[ii],**kwds))
+        mlist.append(ConvTranspose2dLayer(layer_channels[0],output_channels,batchnorm=False,**kwds))
 
         self.Network = nn.Sequential(*mlist)
     def forward(self, x):
@@ -357,8 +362,9 @@ class PooledEncoder(nn.Module):
 
         if layer_channels is None: 
             layer_channels = (64,128)
-            
-        pooling = nn.MaxPool1d(kernel_size=2,stride=2,padding=0)
+           
+        # pooling = nn.MaxPool1d(kernel_size=2,stride=2,padding=0)
+        pooling = nn.MaxPool2d(kernel_size=(1, 2), stride=(1, 2),padding=(0,0))
         mlist = nn.ModuleList()
         mlist.append(nn.Sequential(
             nn.Conv1d(input_channels,layer_channels[0],kernel_size=3,stride=1,padding=1), pooling, nn.LeakyReLU(), nn.BatchNorm1d(layer_channels[0])))
@@ -449,7 +455,9 @@ class NormalLikelihood(nn.Module):
 
         if self.scale_invariant:
             for i in range(x.shape[0]):
-                alpha[i] = (x[i] * mu[i]).sum() / (mu[i] * mu[i]).sum()
+                d = (mu[i] * mu[i]).sum()
+                if d == 0.0: d += 1.0
+                alpha[i] = (x[i] * mu[i]).sum() / d
                 
         eps = x - mean*alpha
 
@@ -465,22 +473,24 @@ def output_size(H_in, kernel_size, stride=1,  dilation=1, padding=0):
     return H_out // stride + 1
 
 def make_invariant(x,y):
-    return  x * (x * y).sum() / (x * x).sum()
+    return  ((x * y).sum() + 1e-9) / ((x * x).sum() + 1e-9)
 
 #%%
 if __name__ == "__main__":
     enc = StridedEncoder(input_channels=1,output_channels=32)
     dec = StridedDecoder(input_channels=32,output_channels=1)
     
-    dimx = 32
+    dimx = 257
     x = torch.randn(4,1,dimx,129)
     z = enc(x)
     y = dec(z)
 
-    model = DCAE(dimx=dimx,dimz=32)
-    y = model(x)[0]
+    model = DCAE(dimx=dimx,dimz=32,kernel_size=(3,2),stride=(2,1),padding=(1,0),layer_channels=(32,64,64,64,64))
+    output = model(x)
+    
+    x_hat = output['recon_x']
 
     print(x.shape)
-    print(y.shape)
+    print(x_hat.shape)
 
 # %%

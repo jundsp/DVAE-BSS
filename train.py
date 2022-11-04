@@ -34,24 +34,29 @@ def save_result_grid(x,x_hat,s_hat,filename='result.png',epoch=1):
 def save_result(x,x_hat,s_hat,filename='result.png',epoch=1):    
     # Mask estimate
     M = s_hat * (x /  s_hat.sum(1)).unsqueeze(1)
+        
+    alpha = make_invariant(x_hat[0], x[0])
+    x_hat[0] *= alpha
+    s_hat[0] *= alpha
     
-    X = torchToNumpy(x)
-    X_hat = torchToNumpy(x_hat)
-    S_hat = torchToNumpy(s_hat)
-    M = torchToNumpy(M)
-    kwds = dict(cmap='jet',interpolation='none',vmin=0,vmax=2)
+    X = torchToNumpy(mag2db(x[0]))
+    X_hat = torchToNumpy(mag2db(x_hat[0]))
+    S_hat = torchToNumpy(mag2db(s_hat[0]))
+    M = torchToNumpy(mag2db(M[0]))
+    
+    kwds = dict(cmap='jet',interpolation='none',vmin=-50,vmax=6)
     if args.dataset != 'MNIST': 
         kwds['origin'] = 'lower'
         kwds['aspect'] = 'auto'
     fig = plt.figure(figsize=(10,7))
     fig,ax = plt.subplots(2,3,figsize=(8,6))
-    ax[0,0].imshow(X[0],**kwds)
-    ax[1,0].imshow(X_hat[0],**kwds)
-    ax[1,1].imshow(S_hat[0,0],**kwds)
-    ax[0,1].imshow(M[0,0],**kwds)    
+    ax[0,0].imshow(X,**kwds)
+    ax[1,0].imshow(X_hat,**kwds)
+    ax[1,1].imshow(S_hat[0],**kwds)
+    ax[0,1].imshow(M[0],**kwds)    
     for s in range(1,args.num_sources):
-        ax[1,s+1].imshow(S_hat[0,s],**kwds)
-        ax[0,s+1].imshow(M[0,s],**kwds)
+        ax[1,s+1].imshow(S_hat[s],**kwds)
+        ax[0,s+1].imshow(M[s],**kwds)
     
     ax[0,0].set_title('epoch = {}'.format(epoch))
     plt.tight_layout()
@@ -60,17 +65,21 @@ def save_result(x,x_hat,s_hat,filename='result.png',epoch=1):
     plt.close()    
 
 def save_sample(N=10,filename='result.png',epoch=1):
+    N = int(N)
     
-    s = model.sample(N=N,device=device)[0]
+    s,z,_ = model.sample(N=N,device=device)
     S = torchToNumpy( s[0,:] )
+    Z = torchToNumpy( z[0,:] )
             
-    fig = plt.figure(figsize=(6,4))
-    kwds = dict(cmap='jet',interpolation='none',vmin=0,vmax=2)
+    fig,ax = plt.subplots(2,figsize=(6,6))
+    kwds = dict(cmap='jet',interpolation='none')
     if args.dataset != 'MNIST': 
         kwds['origin'] = 'lower'
         kwds['aspect'] = 'auto'
-    plt.imshow(S[0],**kwds)
-    plt.title('epoch = {}'.format(epoch))
+    ax[0].imshow(S[0],vmin=0,**kwds)
+    ax[0].set_title('epoch = {}'.format(epoch))
+    ax[1].imshow(Z.T,**kwds)
+    plt.tight_layout()
     plt.savefig(filename)    
     writer.add_figure('Samples', fig, epoch)
     plt.close()  
@@ -105,10 +114,8 @@ def train(epoch):
         data = pipeline(data.to(device))
 
         optimizer.zero_grad()
-        recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(data)
-        print(recon_x.shape)
-        print(data.shape)
-        ell, kld = model.loss_function(data,recon_x, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
+        output = model(data)
+        ell, kld = model.loss_function(data,output)
         loss = ell + kld
         loss.backward()
         optimizer.step()
@@ -118,11 +125,11 @@ def train(epoch):
         info['kld'].append(kld.item())
 
         if (batch_idx+1) % args.log_interval == 0:
-            print(('Epoch {:2.0f} - {:3.0f} % ==> | Loss = {:4.2f}\t| ELL = {:4.2f}\t| KLD = {:4.2f}').format(
+            print(('Epoch {:2.0f} - {:3.0f} % ==> | Loss = {:4.6f}\t| ELL = {:4.6f}\t| KLD = {:4.6f}').format(
                 epoch,100.0*(batch_idx+1)/float(len(train_loader)),loss.item(),ell.item(),kld.item()))
 
     info = dict_average(info)
-    print(('Epoch {:2.0f} ==> \t TRAIN | Loss = {:4.2f}\t| ELL = {:4.2f}\t| KLD = {:4.2f}').format(epoch, info['loss'], info['ell'], info['kld']))
+    print(('Epoch {:2.0f} ==> \t TRAIN | Loss = {:4.6f}\t| ELL = {:4.6f}\t| KLD = {:4.6f}').format(epoch, info['loss'], info['ell'], info['kld']))
     save_info(info,category='Train',epoch=epoch)
     return info
 
@@ -133,8 +140,8 @@ def test(epoch):
         for batch_idx, (data,_) in enumerate(test_loader):
             data = pipeline(data.to(device))
 
-            recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(data)
-            ell, kld = model.loss_function(data,recon_x, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q)
+            output = model(data)
+            ell, kld = model.loss_function(data,output)
             loss = ell + kld
 
             info['loss'].append(loss.item())
@@ -142,9 +149,9 @@ def test(epoch):
             info['kld'].append(kld.item())
 
         info = dict_average(info)
-        print(('\t \t VALIDATE | Loss = {:4.2f}\t| ELL = {:4.2f}\t| KLD = {:4.2f}').format(info['loss'], info['ell'], info['kld']))
-        save_result(data,recon_x,recon_s,filename=path_results+'/result.png',epoch=epoch)
-        save_sample(N=mu_q.size(1),filename=path_results+'/sample.png',epoch=epoch)
+        print(('\t \t VALIDATE | Loss = {:4.6f}\t| ELL = {:4.6f}\t| KLD = {:4.6f}').format(info['loss'], info['ell'], info['kld']))
+        save_result(data,output['recon_x'],output['recon_s'],filename=path_results+'/result.png',epoch=epoch)
+        save_sample(N=output['mu_q'].size(1)*1.5,filename=path_results+'/sample.png',epoch=epoch)
         save_info(info,category='Test',epoch=epoch)
     return info
 
@@ -158,11 +165,11 @@ if __name__ == "__main__":
     print(device)
 
     if args.dataset == 'MNIST':
-        dim_data = (32,32)
-        transform = transforms.Compose([transforms.CenterCrop(size=dim_data),transforms.RandomAffine(degrees=0,translate=(0.2,0.2)),transforms.ToTensor()])
+        dim_data = (33,32)
+        transform = transforms.Compose([transforms.CenterCrop(size=dim_data),transforms.RandomAffine(degrees=0,translate=(0.05,0.2)),transforms.ToTensor()])
         train_set = datasets.MNIST(args.data_directory, train=True, transform=transform, download=True)
         test_set = datasets.MNIST(args.data_directory, train=False, transform=transform, download=True)
-        pipeline = ImagePipeline(n_src=args.num_sources,duration=args.duration)
+        pipeline = ImagePipeline(n_src=args.num_sources,duration=args.duration,shift=.1)
 
     if args.dataset == 'MUMS':
         dim_data = (128,args.duration)
@@ -173,10 +180,12 @@ if __name__ == "__main__":
         nfft = 512
         dim_data = (nfft//2+1,args.duration)
         transform = transforms.Compose([Shift(shift_amount=.1)])
-        train_set = Audioset(root=args.data_directory,path_csv='rwc_dataset/validate.csv',duration=6,nsrc=2,transform=transform,)
-        test_set =  Audioset(root=args.data_directory,path_csv='rwc_dataset/test.csv',duration=6,nsrc=2,transform=transform,)
-        pipeline = AudioPipeline(n_time=args.duration,n_fft=nfft,hop_length=64,compression=1)
+        train_set = Audioset(root=args.data_directory + '/RWC_dataset',path_csv='train.csv',duration=6,nsrc=args.num_sources,transform=transform,)
+        test_set =  Audioset(root=args.data_directory + '/RWC_dataset',path_csv='validate.csv',duration=6,nsrc=args.num_sources,transform=transform,)
+        pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=256,duration=args.duration)
         
+    # train_set.n_files = 128
+    # test_set.n_files = 128
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=True, **kwargs)
     
@@ -207,17 +216,36 @@ if __name__ == "__main__":
     lr = 2e-4
 
     model_name = ('{}/svae_{}_K{}_L{}_{}_D{}.pt').format(path_saves,args.dataset,str(args.num_sources),str(args.num_layers),args.net_type,args.latent_dim)
-
-    model = DCAE(
+    
+    
+    if args.conv2d:
+        kernel_size=(3,3)
+        stride=(2,2)
+        padding=(1,1)
+        
+        model = DCAE(
+            dimx=dimx,
+            dimz=dimz,
+            dimh=dimh,
+            dimg=dimg,
+            num_sources=args.num_sources,
+            net_type=args.net_type,
+            num_layers=args.num_layers,
+            scale_invariant=True,
+            layer_channels=(32,64,128,128),
+            kernel_size=kernel_size,stride=stride,padding=padding,
+            ).to(device)
+    else:
+        model = DSAE(
         dimx=dimx,
         dimz=dimz,
         dimh=dimh,
         dimg=dimg,
         num_sources=args.num_sources,
-        net_type=args.net_type,
+        net_type='pooled',
         num_layers=args.num_layers,
         scale_invariant=True,
-        layer_channels=(32,64,128)
+        layer_channels=(32,64,128,128),
         ).to(device)
     
     print(model)
@@ -230,3 +258,4 @@ if __name__ == "__main__":
 
         if epoch % args.save_interval == 0:
             torch.save(model.state_dict(),model_name)
+
