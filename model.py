@@ -505,6 +505,8 @@ def output_size(H_in, kernel_size, stride=1,  dilation=1, padding=0):
 def make_invariant(x,y):
     return  ((x * y).sum() + 1e-9) / ((x * x).sum() + 1e-9)
 
+def create_masks(x,s_hat):
+    return s_hat * (x /  s_hat.sum(1)).unsqueeze(1) 
 
 
 #%%

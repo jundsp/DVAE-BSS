@@ -38,10 +38,9 @@ def save_result_grid(x,x_hat,s_hat,filename='result.png',epoch=1):
     save_image(grid,filename)
     writer.add_image('Results', grid, epoch)
     
-    
 def save_result(x,x_hat,s_hat,filename='result.png',epoch=1):    
     # Mask estimate
-    M = s_hat * (x /  s_hat.sum(1)).unsqueeze(1)
+    M = create_masks(x,s_hat)
         
     alpha = make_invariant(x_hat[0], x[0])
     x_hat[0] *= alpha
@@ -96,24 +95,6 @@ def save_info(info,category='Train',epoch=1):
     writer.add_scalar(str(category)+'/Loss',info['loss'],epoch)
     writer.add_scalar(str(category)+'/ELL',info['ell'], epoch)
     writer.add_scalar(str(category)+'/KLD',info['kld'], epoch)
-
-def process_data(data,duration=256):
-    n = data.shape[0]
-        
-    k = duration // data.shape[-1]
-    m = n // k
-    datacat = torch.zeros(m,data.shape[-2],duration)
-    for mm in range(m):
-        idx = mm*k
-        datacat[mm] = torch.cat([data[i+idx] for i in range(k)],-1)
-                
-    data = datacat + 0
-    if args.mix_data is True:
-        n = data.size(0)
-        perms = torch.randperm(n)
-        data = (data[:n//2] + data[n//2:n//2*2])
-                        
-    return data
 
 def train(epoch,lossfun,train_loader,train_rank):
     model.train()
@@ -288,7 +269,7 @@ if __name__ == "__main__":
         str(args.num_layers),
         args.net_type,
         args.latent_dim,
-        args.compression*10,10)
+        int(args.compression*10),int(10))
     
     if args.conv2d:
         kernel_size=(3,3)

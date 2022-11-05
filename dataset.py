@@ -53,7 +53,7 @@ def walk_files(root, suffix, prefix=False, remove_suffix=False):
                 yield fname, descr
 
 class Audioset(Dataset):
-    def __init__(self,root,path_csv,duration=4,normalize=True,suffix='.wav',samplerate=16000,augment_levels=False,silence=.1):
+    def __init__(self,root,path_csv,duration=4,normalize=True,suffix='.wav',samplerate=16000,augment_levels=False,silence=.1,max_files=20):
         self._path = root
         self.duration = duration
         self.normalize = normalize
@@ -70,6 +70,7 @@ class Audioset(Dataset):
         self.normalize = normalize
         self.silence_samples = int(silence*samplerate)+1
         self.dbmin = 30
+        self.max_files = max_files
         
     def _load_audio(self,n):
         path = self._walker[n]
@@ -95,7 +96,9 @@ class Audioset(Dataset):
         L = np.random.randint(self.silence_samples)
         k = n
         output = torch.zeros(self.samples)
-        while L < self.samples:
+        flag = (L < self.samples)
+        n_appended = 0
+        while flag is True:
             waveform = self._load_audio(k)
             N = len(waveform)
             if (N+L) >= self.samples:
@@ -105,8 +108,12 @@ class Audioset(Dataset):
             S = np.random.randint(self.silence_samples)
             L += S
             k = np.random.randint(self.n_files)
-            # print('silence {}'.format(S))
-            # print('k = {}'.format(k))
+
+            n_appended += 1
+            if n_appended >= self.max_files:
+                flag = False
+            if L >= self.samples:
+                flag = False
         
         return output, self.samplerate
 
@@ -223,9 +230,11 @@ class AudioPipeline(torch.nn.Module):
             torchaudio.transforms.FrequencyMasking(freq_mask_param=10),
             torchaudio.transforms.TimeMasking(time_mask_param=10),
         )
-        
-    def forward(self, waveform: torch.Tensor) -> torch.Tensor:
-        spec = self.spec(waveform) ** self.compression
+
+        self.stft = torchaudio.transforms.Spectrogram(n_fft=n_fft, power=None,normalized=True, hop_length=hop_length)
+        self.inverse_stft = torchaudio.transforms.InverseSpectrogram(n_fft=n_fft, normalized=True, hop_length=hop_length)
+
+    def crop(self,spec):
         if self.n_time is not None:
             T = spec.shape[-1]
             if self.n_time < T:
@@ -235,6 +244,23 @@ class AudioPipeline(torch.nn.Module):
                 padding = (padding//2, padding-padding//2)
                 spec = F.pad(spec,padding)
         return spec
+
+    def forward_complex(self, waveform: torch.Tensor) -> torch.Tensor:
+        spec = self.stft(waveform)
+        spec = self.crop(spec)
+        spec = spec.abs() ** self.compression * torch.exp(1j*spec.angle())
+        return spec
+
+    def invert(self,stft):
+        stft_linear = stft.abs() ** (1.0 / self.compression) * torch.exp(1j*stft.angle())
+        return self.inverse_stft(stft_linear)
+        
+    def forward(self, waveform: torch.Tensor) -> torch.Tensor:
+        spec = self.spec(waveform) ** self.compression
+        spec = self.crop(spec)
+        return spec
+
+    
 
 class Shift(object):
     def __init__(self, shift_amount=0.0):

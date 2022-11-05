@@ -1,3 +1,4 @@
+#%%
 import torch
 from torch import nn, optim
 from torch.nn import functional as F
@@ -9,91 +10,34 @@ from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 import matplotlib.pyplot as plt
 import argparse
 from torchvision import datasets, transforms
-from model import DSAE
+from model import *
 from dataset import *
 from torchvision.utils import make_grid, save_image
 from sklearn.manifold import  MDS
 import seaborn as sns
+from argparser import parser
+from utils.utils import optimal_permute
 
-
-parser = argparse.ArgumentParser(description='DSAE Example')
-parser.add_argument('--batch-size', type=int, default=64, metavar='N',
-                    help='input batch size for training (default: 128)')
-parser.add_argument('--epochs', type=int, default=10, metavar='N',
-                    help='number of epochs to train (default: 10)')
-parser.add_argument('--save-interval', type=int, default=1, metavar='N',
-                    help='number of epochs to train (default: 10)')
-parser.add_argument('--num-workers', type=int, default=4, metavar='N',
-                    help='number of epochs to train (default: 10)')
-parser.add_argument('--log-interval', type=int, default=10, metavar='N',
-                    help='number of epochs to train (default: 10)')
-parser.add_argument('--no-cuda', action='store_true', default=False,
-                    help='enables CUDA training')
-parser.add_argument('--mix-data', type=str, default='True',
-                    help='enables CUDA training')
-parser.add_argument('--seed', type=int, default=1, metavar='S',
-                    help='random seed (default: 1)')
-parser.add_argument('--dataset', type=str, default='MNIST', metavar='fname',
-                    help='name of the dataset')
-parser.add_argument('--kernel-size', type=int, default=8, metavar='fname',
-                    help='size of sliding kernel (in time)')
-parser.add_argument('--overlap', type=int, default=2, metavar='fname',
-                    help='size of sliding kernel (in time)')
-parser.add_argument('--num-sources', type=int, default=4, metavar='fname',
-                    help='number of sources in the model')
-parser.add_argument('--num-layers', type=int, default=2, metavar='fname',
-                    help='number of sources in the model')
-parser.add_argument('--data-directory', type=str, default='/Users/julian/Documents/Code/Compute_Canada/data', metavar='fname',
-                    help='Folder containing the spectrogram data')
-parser.add_argument('--net-type', type=str, default='pooled', metavar='fname',
-                    help='name of the dataset')
 
 jet = cm.get_cmap('jet', 256)
 newcolors = jet(np.linspace(0, 1, 256))
 newcolors[0] = (0.0,0.0,0.0,1.0)
 mycmp = ListedColormap(newcolors)
 
-def tolog(x):
-    x = (x+1e-5).log()
-    x -= x.min()
-    x /= x.abs().max()
-    return x
-
-def process_data(data):
-    if args.mix_data == 'True':
-        n = data.size(0)//2
-        data = 0.5*(data[:n] + data[n:n*2])
-    return data.squeeze(1)
-
-class ISTFT(nn.Module):
-    def __init__(self, n_fft, hop_length = None):
-        super(ISTFT, self).__init__()
-        self.n_fft = n_fft
-        self.hop_length = n_fft//4
-        if self.hop_length is not None:
-            self.hop_length = hop_length
-            
-        self.window = torch.hann_window(n_fft)
-
-    def forward(self, x):
-        x = torch.istft(x, n_fft = self.n_fft, hop_length=self.hop_length, win_length=None, window=self.window, center=True,  normalized=False, onesided=True)
-        return x
-
-
 def mp2comp(magnitude,phase):
     Zc = magnitude*torch.exp(1j*phase)
     Z = torch.view_as_real(Zc)
     return Z
 
-def pad_full(Z):
+def pad_full(Z,nfft):
     out = torch.zeros(Z.size(0),nfft//2+1,Z.size(2),2)
     out[:,:Z.size(1)] = Z
     return out
 
 # Batch Synthesize
-def synthesize(magnitude,phase):
+def synthesize(magnitude,phase,istft):
     X = mp2comp(magnitude=magnitude,phase=phase)
-    X = pad_full(X)* alpha 
+    X = pad_full(X) 
     x = istft(X)
     return x
 
@@ -103,128 +47,138 @@ def dict_average(input):
         avg[k] = sum(v) / float(len(v))
     return avg
 
-args = parser.parse_args()
+#%%
+args = parser.parse_args(args=[])
 torch.manual_seed(args.seed)
+np.random.seed(args.seed)
+args.data_directory = "/Volumes/JulianSSD/data"
+args.duration = 4
+args.n_time = 257
+args.compression = .5
+args.batch_size = 4
+
 args.cuda = not args.no_cuda and torch.cuda.is_available()
+
 device = torch.device("cuda" if args.cuda else "cpu")
 kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if args.cuda else {}
 
-args.dataset = 'MNIST'
-if args.dataset == 'MNIST':
-    dim_data = (32,64)
-    args.data_directory = '/Users/julian/Documents/Code/Compute_Canada/data'
-    transform = transforms.Compose([transforms.CenterCrop(size=dim_data),transforms.RandomAffine(degrees=0,translate=(0.25,0.0)),transforms.ToTensor()])
-    train_set = datasets.MNIST(args.data_directory, train=True, transform=transform)
-    test_set = datasets.MNIST(args.data_directory, train=False, transform=transform)
-if args.dataset == 'MUMS':
-    dim_data = (128,512)
-    args.data_directory = '/Volumes/Julian SSD/data/MUMS'
-    train_set = MUMS(args.data_directory,train=True,duration=dim_data[1], bins=dim_data[0],magnitude=False)
-    test_set = MUMS(args.data_directory, train=False, duration=dim_data[1], bins=dim_data[0],magnitude=False)
-if args.dataset == 'Audio':
-    dim_data = (128,64)
-    # args.data_directory = '/Users/julian/Documents/Code/data/nsynth'
-    train_set = Audioset(args.data_directory, spectrogram=True, duration=dim_data[1], bins=dim_data[0])
-    test_set = Audioset(args.data_directory, spectrogram=True, duration=dim_data[1], bins=dim_data[0])
-train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True, **kwargs)
-test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=True, **kwargs)
+nfft = 512
+dim_data = (nfft//2+1,args.duration)
+test_set = Audioset(root=args.data_directory + '/RWC_dataset',path_csv='test.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=0,max_files=2)
+mixer = Mixer(n_sources=args.num_sources)
+pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
+
+test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=True)
+
+mixer = mixer.to(device)
+pipeline = pipeline.to(device)
+
+#%% LOAD MODEL
+
+args.latent_dim = 128
+args.rnn_dim = 512
 
 dimx = dim_data[0]
-dimz = 16
-dimh = 64
-dimg = 64
-model_name = ('saves/{}/model_{}_K{}_L{}_{}.pt').format(args.dataset,args.dataset,str(args.num_sources),str(args.num_layers),args.net_type)
+dimz = args.latent_dim
+dimh = args.rnn_dim
+dimg = args.rnn_dim
+kernel_size=(3,3)
+stride=(2,2)
+padding=(1,1)
 
-model = DSAE(dimx=dimx,dimz=dimz,dimh=dimh,dimg=dimg,num_sources=args.num_sources,net_type=args.net_type,num_layers=args.num_layers)
-model.load_state_dict(torch.load(model_name,map_location=torch.device('cpu')))
+model = DCAE(
+        dimx=dimx,
+        dimz=dimz,
+        dimh=dimh,
+        dimg=dimg,
+        num_sources=args.num_sources,
+        net_type=args.net_type,
+        num_layers=args.num_layers,
+        scale_invariant=True,
+        layer_channels=(32,64,128,128),
+        kernel_size=kernel_size,stride=stride,padding=padding,
+        )
+
+model_path = "/Users/julian/Desktop/svae_RWC_K2_L1_pooled_D128.pt"
+# original saved file with DataParallel
+state_dict = torch.load(model_path,map_location=torch.device(device))
+# create new OrderedDict that does not contain `module.`
+from collections import OrderedDict
+new_state_dict = OrderedDict()
+for k, v in state_dict.items():
+    name = k[7:] # remove `module.`
+    new_state_dict[name] = v
+# load params
+model.load_state_dict(new_state_dict)
+
+
+#%% EVALUATE
+
+def si_sdr(estimate,target,salt=1e-14):
+    Rss = (target * target).sum(-1)
+    alpha = (estimate * target).sum(-1) / Rss
+    e_target = target * alpha.unsqueeze(-1)
+    e_residual = estimate - e_target
+    E_target = (e_target * e_target).sum(-1) + salt
+    E_residual = (e_residual * e_residual).sum(-1) + salt
+
+    output = 10*(E_target.log10() - E_residual.log10())
+    return output
+
 model.eval()
 
-data = next(iter(test_loader))[0]
-data = process_data(data.to(device))
+Mix = []
+Targets = []
+Estimates = []
+SiSDR = []
 
-if args.dataset == 'MUMS':
-    stft = data
-    data = torch.norm(data,2,-1)
+#%%
+with torch.no_grad():
+    # for batch_idx, (data,_) in enumerate(test_loader):
+    data,_ = next(iter(test_loader))
+    mix, sources = mixer(data.to(device))
+    mix_stft = pipeline.forward_complex(mix)
+    source_stft = pipeline.forward_complex(sources)
 
-recon_x, recon_s, mu_q, logvar_q, mu_p, logvar_p, mu0_q, logvar0_q = model(data)
+    data = mix_stft.abs()
+    output = model(data)
 
-m = 8
-nrows = 2+args.num_sources
-n = nrows*m
-togrid = torch.zeros(n,1,data.size(-2),data.size(-1))
-togrid[::nrows] = data[:m].unsqueeze(1)
-togrid[1::nrows] = recon_x[:m].detach().unsqueeze(1)
-for k in range(args.num_sources):
-    togrid[2+k::nrows] = recon_s[:m,k].detach().unsqueeze(1)
+    m_hat = create_masks(data,output['recon_s'])
+    estimates_stft = m_hat * torch.exp(1j*mix_stft.angle().unsqueeze(1))
 
-sample, z , h = model.sample(M=8,N=mu_q.size(1)*2)
-sample = sample.detach()
+    mix = pipeline.invert(mix_stft)
+    sources = pipeline.invert(source_stft)
+    estimates = pipeline.invert(estimates_stft)
 
-fig, ax = plt.subplots(8,2+args.num_sources)
-k=0
-for j in range(8):
-	for i in range(2+args.num_sources):
-		ax[j,i].imshow(togrid[k,0],vmin=0,vmax=1,cmap=mycmp),
-		ax[j,i].axis('off')
-		k+=1
-ax[0,0].set_title('$x$')
-ax[0,1].set_title('$\hat{x}$')
-for i in range(args.num_sources):
-	ax[0,2+i].set_title('$\hat{s}_'+str(i+1)+'$')
-plt.savefig('results/'+str(args.dataset)+'/result_K'+str(args.num_sources)+'.pdf')
-plt.show()
+    estimates = optimal_permute(estimates,sources)
+
+    sisdr = si_sdr(estimate=estimates,target=sources)
+
+    Mix.append(mix)
+    Targets.append(sources)
+    Estimates.append(estimates)
+    SiSDR.append(sisdr)
 
 
-fig, ax = plt.subplots(8,args.num_sources,sharex=True, sharey=True)
-for i in range(8):
-    for j in range(args.num_sources):
-        ax[i,j].imshow(sample[i,j],vmin=0,vmax=1,cmap=mycmp)
-        ax[i,j].get_yaxis().set_visible(False)
-for i in range(args.num_sources):
-    ax[0,i].set_title('Sampled $s_'+str(i+1)+'$')
-plt.savefig('results/'+str(args.dataset)+'/samples_K'+str(args.num_sources)+'.pdf')
-plt.show()
+# %%
+n = 1
+kwds = dict(cmap='jet',origin='lower',aspect='auto',interpolation='none',vmin=-100)
+fig,ax = plt.subplots(2,3,figsize=(7,4))
+ax[0,0].imshow(mag2db(pipeline(mix[n])+1e-8),**kwds)
+ax[0,1].imshow(mag2db(pipeline(sources[n,0])+1e-8),**kwds)
+ax[1,1].imshow(mag2db(pipeline(sources[n,1])+1e-8),**kwds)
+ax[0,2].imshow(mag2db(pipeline(estimates[n,0])+1e-8),**kwds)
+ax[1,2].imshow(mag2db(pipeline(estimates[n,1])+1e-8),**kwds)
+ax[1,0].remove()
 
+ax[0,0].set_title('Input Mixture')
+ax[0,1].set_title('Target')
+ax[0,2].set_title('Estimates')
+plt.tight_layout()
 
-znp = mu_q[:8].view(-1,dimz).detach().numpy()
-mds = MDS(n_components=2)
-mds_result = torch.from_numpy(mds.fit_transform(znp)).view(-1,mu_q.size(1),2)
-for i in range(mds_result.size(0)):
-    plt.plot(mds_result[i,:,0],mds_result[i,:,1])
-    plt.scatter(mds_result[i,:,0],mds_result[i,:,1],alpha=.3)
-plt.show()
-
-for i in range(mds_result.size(0)):
-    plt.plot(mds_result[i])
-plt.show()
-
-vaem = recon_s * (data / recon_x).unsqueeze(1)
-
-if args.dataset == 'MUMS':
-    print('Synthesizing Audio')
-    fs = int(44100)
-    nfft = 2048
-    H = nfft // 4
-
-    n = data.size(0)
-    X = stft.squeeze(1)
-    phase = torch.view_as_complex(X).angle()
-
-    istft = ISTFT(n_fft=nfft,hop_length=H)
-    alpha = np.sqrt(nfft)
-
-    sound_gt = synthesize(magnitude=data.detach(),phase=phase)
-    sound_vae = torch.zeros(sound_gt.size(0),args.num_sources,sound_gt.size(-1))
-    sound_vaem = torch.zeros(sound_gt.size(0),args.num_sources,sound_gt.size(-1))
-    for k in range(args.num_sources):
-        sound_vae[:,k] = synthesize(magnitude=recon_s[:,k].detach(),phase=phase)
-        sound_vaem[:,k] = synthesize(magnitude=vaem[:,k].detach(),phase=phase)
-    sound_sample = synthesize(magnitude=sample.detach(),phase=sample.detach()*0)
-    sound_sample /= sound_sample.abs().max()
-
-    j = torch.randperm(sound_gt.size(0))[0]
-    torchaudio.save(filepath='sounds/gt.wav',sample_rate=fs,src=sound_gt[j])
-    for k in range(args.num_sources):
-        torchaudio.save(filepath='sounds/estimate_'+str(k+1)+'.wav',sample_rate=fs,src=sound_vae[j,k])
-        torchaudio.save(filepath='sounds/estimate_masked_'+str(k+1)+'.wav',sample_rate=fs,src=sound_vaem[j,k])
-    torchaudio.save(filepath='sounds/sample.wav',sample_rate=fs,src=sound_sample[0])
+# %%
+torchaudio.save("/Users/julian/Desktop/mix.wav",mix[n].unsqueeze(0),16000)
+for i in range(sources.shape[1]):
+    torchaudio.save("/Users/julian/Desktop/source_{}.wav".format(i+1),sources[n,i].unsqueeze(0),16000)
+    torchaudio.save("/Users/julian/Desktop/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0),16000)
+# %%
