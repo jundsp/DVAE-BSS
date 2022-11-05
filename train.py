@@ -57,14 +57,12 @@ def save_result(x,x_hat,s_hat,filename='result.png',epoch=1):
         kwds['origin'] = 'lower'
         kwds['aspect'] = 'auto'
     fig = plt.figure(figsize=(10,7))
-    fig,ax = plt.subplots(2,3,figsize=(8,6))
+    fig,ax = plt.subplots(2,1+args.num_sources,figsize=((1+args.num_sources)*2.5,6))
     ax[0,0].imshow(X,**kwds)
-    ax[1,0].imshow(X_hat,**kwds)
-    ax[1,1].imshow(S_hat[0],**kwds)
-    ax[0,1].imshow(M[0],**kwds)    
-    for s in range(1,args.num_sources):
-        ax[1,s+1].imshow(S_hat[s],**kwds)
+    ax[1,0].imshow(X_hat,**kwds) 
+    for s in range(args.num_sources):
         ax[0,s+1].imshow(M[s],**kwds)
+        ax[1,s+1].imshow(S_hat[s],**kwds)
     
     ax[0,0].set_title('epoch = {}'.format(epoch))
     plt.tight_layout()
@@ -281,14 +279,14 @@ if __name__ == "__main__":
     
     print('From Rank: {}, ==> Making model..'.format(rank))
 
-    model_name = ('{}/svae_{}_K{}_L{}_{}_D{}_C{:d}-{:d}.pt').format(
+    model_name = ('{}/svae_{}_K{}_L{}_{}_D{}_C{}-{}.pt').format(
         path_saves,
         args.dataset,
         str(args.num_sources),
         str(args.num_layers),
         args.net_type,
         args.latent_dim,
-        args.compression*10,10)
+        int(args.compression*10),int(10))
     
     if args.conv2d:
         kernel_size=(3,3)
