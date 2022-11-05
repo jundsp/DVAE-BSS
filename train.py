@@ -191,6 +191,7 @@ if __name__ == "__main__":
     
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     device = torch.device("cuda" if args.cuda else "cpu")
+    print(args)
     
     ngpus_per_node = torch.cuda.device_count()
 
