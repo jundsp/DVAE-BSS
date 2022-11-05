@@ -194,6 +194,10 @@ if __name__ == "__main__":
     
     ngpus_per_node = torch.cuda.device_count()
 
+    """ This prints information about the GPUs.
+    """
+    call(["nvidia-smi", "--format=csv", "--query-gpu=index,name,driver_version,memory.total,memory.used,memory.free"])
+
     """ This next line is the key to getting DistributedDataParallel working on SLURM:
 		SLURM_NODEID is 0 or 1 in this example, SLURM_LOCALID is the id of the 
  		current process inside a node and is also 0 or 1 in this example."""
@@ -312,15 +316,7 @@ if __name__ == "__main__":
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[current_device],find_unused_parameters=True)
     
     lossfun = LossFunction().to(device)
-    
-    # print("GPU MEMORY {}".format(torch.cuda.mem_get_info()))
-    
-    call(["nvidia-smi", "--format=csv", "--query-gpu=index,name,driver_version,memory.total,memory.used,memory.free"])
 
-    
-    
-    
-        
     optimizer = optim.Adam(params=model.parameters(),lr=lr)
             
     for epoch in range(1,args.epochs+1):
