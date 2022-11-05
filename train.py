@@ -280,7 +280,14 @@ if __name__ == "__main__":
     
     print('From Rank: {}, ==> Making model..'.format(rank))
 
-    model_name = ('{}/svae_{}_K{}_L{}_{}_D{}.pt').format(path_saves,args.dataset,str(args.num_sources),str(args.num_layers),args.net_type,args.latent_dim)
+    model_name = ('{}/svae_{}_K{}_L{}_{}_D{}_C{:d}-{:d}.pt').format(
+        path_saves,
+        args.dataset,
+        str(args.num_sources),
+        str(args.num_layers),
+        args.net_type,
+        args.latent_dim,
+        args.compression*10,10)
     
     if args.conv2d:
         kernel_size=(3,3)
