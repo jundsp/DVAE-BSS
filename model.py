@@ -193,6 +193,7 @@ class DSAE(nn.Module):
         recon_s = mu_s
         recon_x = recon_s.sum(1)
         
+        n = x.shape[0]
         out = {
             'recon_x': recon_x, 
             'recon_s': recon_s, 
@@ -201,7 +202,10 @@ class DSAE(nn.Module):
             'mu_p': mu_p, 
             'logvar_p': logvar_p, 
             'mu0_q': mu0_q, 
-            'logvar0_q': logvar0_q
+            'logvar0_q': logvar0_q,
+            'smu0': self.batch_and_source(self.smu0,n),
+            'slogvar0':  self.batch_and_source(self.slogvar0,n),
+            'variance': self.get_variance(),
             }
         return out
 
@@ -463,6 +467,32 @@ class NormalLikelihood(nn.Module):
 
         return 0.5*torch.sum(var.log() + (eps).pow(2) / var)
 
+class LossFunction(nn.Module):
+    def __init__(self,averaged=True,scale_invariant=True):
+        super(LossFunction,self).__init__()
+        
+        self.averaged = averaged        
+        self.likelihood = NormalLikelihood(scale_invariant=scale_invariant)
+        
+    def forward(self,x,output):
+        mu_x,mu,logvar,mu_prior,logvar_prior, mu0, logvar0 = output['recon_x'], output['mu_q'], output['logvar_q'],output['mu_p'], output['logvar_p'], output['mu0_q'], output['logvar0_q']
+        smu0, slogvar0, variance = output['smu0'], output['slogvar0'], output['variance']
+        
+        n = x.size(0)
+        N = n + 0
+        if self.averaged is True:
+            N = torch.numel(x)
+        N = float(N)
+            
+        # Si-SDR? scale the target... but it is the mixture.
+        ell = self.likelihood(x, mu_x, var=variance) 
+        kld = KLD(mu,logvar,prior_mean=mu_prior,prior_logvar=logvar_prior) 
+        prior_mean = smu0
+        prior_logvar = slogvar0
+        kld += KLD(mu0,logvar0,prior_mean=prior_mean,prior_logvar=prior_logvar)
+        
+        return ell / N , kld / N
+    
 def reparameterize(mu, logvar):
     std = torch.exp(0.5*logvar)
     eps = torch.randn_like(std)
@@ -474,6 +504,8 @@ def output_size(H_in, kernel_size, stride=1,  dilation=1, padding=0):
 
 def make_invariant(x,y):
     return  ((x * y).sum() + 1e-9) / ((x * x).sum() + 1e-9)
+
+
 
 #%%
 if __name__ == "__main__":

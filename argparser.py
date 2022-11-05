@@ -16,6 +16,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
 parser.add_argument('--mix-data', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--conv2d', action='store_true', default=False)
+parser.add_argument('--augment-levels', action='store_true', default=False)
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--dataset', type=str, default='MNIST', metavar='fname',
@@ -30,8 +31,10 @@ parser.add_argument('--latent-dim', type=int, default=32, metavar='fname',
                     help='dimension of latent sources')
 parser.add_argument('--rnn-dim', type=int, default=128, metavar='fname',
                     help='dimension of rnn')
-parser.add_argument('--duration', type=int, default=512, metavar='fname',
-                    help='dimension of time')
+parser.add_argument('--duration', type=float, default=8, metavar='fname',
+                    help='duration in seconds')
+parser.add_argument('--n-time', type=int, default=513, metavar='N',
+                    help='Time frames')
 parser.add_argument('--data-directory', type=str, default='/Users/julian/Documents/Code/data/mnist', metavar='fname',
                     help='Folder containing the spectrogram data')
 parser.add_argument('--net-type', type=str, default='pooled', metavar='fname',
@@ -43,3 +46,8 @@ parser.add_argument('--output-directory', type=str, default='results', metavar='
 parser.add_argument('--job-id', type=str, default='local', metavar='fname',
                     help='Slurm job id')
 parser.add_argument('--compression', type=float, default=1)
+
+parser.add_argument('--init_method', default='tcp://127.0.0.1:3456', type=str, help='')
+parser.add_argument('--dist-backend', default='nccl', type=str, help='')
+parser.add_argument('--world_size', default=1, type=int, help='')
+parser.add_argument('--distributed', action='store_true', help='')

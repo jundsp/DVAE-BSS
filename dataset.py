@@ -1,5 +1,4 @@
 #%%
-from locale import normalize
 import torch
 from torch.utils.data import Dataset
 import numpy as np
@@ -12,6 +11,8 @@ import torch.utils.data
 from torchvision import datasets, transforms
 import random
 import pandas as pd
+from utils.utils import mag2db, db2mag
+import torch.nn.functional as F
 
 def round_pow2(x):
     return int(np.power(2,np.ceil(np.log2(x))))
@@ -52,7 +53,7 @@ def walk_files(root, suffix, prefix=False, remove_suffix=False):
                 yield fname, descr
 
 class Audioset(Dataset):
-    def __init__(self,root,path_csv,duration=4,normalize=True,suffix='.wav',samplerate=16000,nsrc=2,transform=None,augment_levels=True):
+    def __init__(self,root,path_csv,duration=4,normalize=True,suffix='.wav',samplerate=16000,augment_levels=False,silence=.1):
         self._path = root
         self.duration = duration
         self.normalize = normalize
@@ -66,8 +67,9 @@ class Audioset(Dataset):
         # self._walker = list(walker)
 
         self.n_files = len(self._walker)
-        self.nsrc = nsrc
-        self.transform = transform
+        self.normalize = normalize
+        self.silence_samples = int(silence*samplerate)+1
+        self.dbmin = 30
         
     def _load_audio(self,n):
         path = self._walker[n]
@@ -82,41 +84,31 @@ class Audioset(Dataset):
             except:
                 print("Could not resample!")
                 print(path)
-        if normalize:
+        if self.normalize:
             waveform /= waveform.abs().max()
-                        
-        data = torch.zeros(self.samples)
-        if len(waveform) < self.samples:
-            data[:len(waveform)] = waveform
-        else:
-            data = waveform[:self.samples]
-        
-        if self.transform:
-            data = self.transform(data)
-            
-        return data
-    
-    def _mix_audio(self,x):
         if self.augment_levels:
-            alpha = torch.rand(self.nsrc,device=x.device,dtype=x.dtype)
-            alpha /= alpha.sum()
-            x = x * alpha.view(-1,1)
-        return x.sum(0), x
-        
+            waveform *= db2mag(torch.rand(1)*self.dbmin-self.dbmin)
+            
+        return waveform
                 
     def __getitem__(self, n):
-        k = random.sample(range(0, self.n_files), self.nsrc)
-        if n not in k:
-            k[0] = n
+        L = np.random.randint(self.silence_samples)
+        k = n
+        output = torch.zeros(self.samples)
+        while L < self.samples:
+            waveform = self._load_audio(k)
+            N = len(waveform)
+            if (N+L) >= self.samples:
+                N = self.samples - L
+            output[L:L+N] = waveform[:N]
+            L += N
+            S = np.random.randint(self.silence_samples)
+            L += S
+            k = np.random.randint(self.n_files)
+            # print('silence {}'.format(S))
+            # print('k = {}'.format(k))
         
-        out = []
-        for i in range(self.nsrc):
-            out.append(self._load_audio(k[i]))
-        
-        sources = torch.stack(out,0)
-        mix, sources = self._mix_audio(sources)
-        
-        return mix, sources
+        return output, self.samplerate
 
     def __len__(self):
         return self.n_files
@@ -215,16 +207,14 @@ class AudioPipeline(torch.nn.Module):
     def __init__(
         self,
         n_fft=512,
-        n_time=256,
-        duration = None,
+        n_time=None,
         hop_length=256,
         stretch_factor=0.8,
         compression=1.0,
     ):
         super().__init__()
-        if duration is None: duration = n_time
         
-        self.affine = transforms.RandomAffine(degrees=0,translate=(0.0,0.0))
+        self.n_time = n_time
         self.spec = torchaudio.transforms.Spectrogram(n_fft=n_fft, power=1,normalized=True, hop_length=hop_length)
         self.compression = compression
 
@@ -234,13 +224,16 @@ class AudioPipeline(torch.nn.Module):
             torchaudio.transforms.TimeMasking(time_mask_param=10),
         )
         
-        self.crop = Crop(size=n_time)
-        self.chain = Chain(size=duration)
-
     def forward(self, waveform: torch.Tensor) -> torch.Tensor:
         spec = self.spec(waveform) ** self.compression
-        spec = self.crop(spec)
-        spec = self.chain(spec)
+        if self.n_time is not None:
+            T = spec.shape[-1]
+            if self.n_time < T:
+                spec = spec.transpose(0,-1)[:self.n_time].transpose(0,-1)
+            else:
+                padding = self.n_time - T
+                padding = (padding//2, padding-padding//2)
+                spec = F.pad(spec,padding)
         return spec
 
 class Shift(object):
@@ -300,7 +293,31 @@ class Chain(object):
             data[mm,:,:size_in] = torch.cat([input[i+idx] for i in range(k)],-1)
                             
         return data
-    
+
+
+class Mixer(torch.nn.Module):
+    def __init__(
+        self,
+        n_sources=1,
+        average=False,
+    ):
+        super(Mixer,self).__init__()
+        self.n_sources = n_sources
+        self.average = average
+
+    def forward(self, waveform: torch.Tensor) -> torch.Tensor:
+        if self.n_sources == 1:
+            return waveform, waveform.unsqueeze(1)
+        else:
+            n_batch = waveform.shape[0]
+            perms = torch.roll(torch.arange(n_batch),1)
+            sources = torch.stack([waveform,waveform[perms]],1)
+            if self.average:
+                sources /= sources.shape[1]
+            mix = sources.sum(1)
+            return mix, sources
+        
+        
 #%%
 if __name__ == "__main__":
     import matplotlib.pyplot as plt

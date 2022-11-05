@@ -28,7 +28,7 @@ def walk_files(root, suffix, prefix=False, remove_suffix=False):
                 yield fname, descr
 
 class Audioset(Dataset):
-    def __init__(self,root,duration=4,normalize=True,suffix='.wav',samplerate=16000,nsrc=1,transform=None,augment_levels=True,silence=.2):
+    def __init__(self,root,duration=4,normalize=True,suffix='.wav',samplerate=16000,nsrc=1,transform=None,augment_levels=True,silence=0):
         self._path = root
         self.duration = duration
         self.normalize = normalize
@@ -62,19 +62,10 @@ class Audioset(Dataset):
                 print(path)
         if self.normalize:
             waveform /= waveform.abs().max()
-
         if self.augment_levels:
             waveform *= db2mag(torch.rand(1)*self.dbmin-self.dbmin)
             
         return waveform
-    
-    def _mix_audio(self,x):
-        if self.augment_levels:
-            alpha = torch.rand(self.nsrc,device=x.device,dtype=x.dtype)
-            alpha /= alpha.sum()
-            x = x * alpha.view(-1,1)
-        return x.sum(0), x
-        
                 
     def __getitem__(self, n):
         L = np.random.randint(self.silence_samples)
