@@ -13,11 +13,10 @@ from torchvision import datasets, transforms
 from model import *
 from dataset import *
 from torchvision.utils import make_grid, save_image
-from sklearn.manifold import  MDS
-import seaborn as sns
 from argparser import parser
 from utils.utils import optimal_permute
 from collections import OrderedDict
+import seaborn as sns
 
 #* Make a class / module to process the bss eval measures, and to do synthesis. / GPU accel
 
@@ -45,11 +44,11 @@ def compute_measures_batch(estimates, targets, salt=1e-14):
     n = targets.shape[0]
     k = targets.shape[1]
     
-    SDR = torch.zeros(n,k)
-    SIR = torch.zeros(n,k)
-    SAR = torch.zeros(n,k)
+    SDR = torch.zeros(n,k,device=estimates.device)
+    SIR = torch.zeros(n,k,device=estimates.device)
+    SAR = torch.zeros(n,k,device=estimates.device)
 
-    Rss = torch.zeros(n,k,k)
+    Rss = torch.zeros(n,k,k,device=estimates.device)
     for ii in range(n):
         Rss[ii] = targets[ii] @ targets[ii].T
     
@@ -102,16 +101,17 @@ def dict_average(input):
     return avg
 
 #%%
-args = parser.parse_args(args=[])
+args = parser.parse_args()
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
-args.data_directory = "/Volumes/JulianSSD/data"
-args.model_directory = "/Users/julian/Desktop"
-args.output_directory = "/Users/julian/Desktop"
-args.duration = 4
-args.n_time = 513
+# args.data_directory = "~/projects/def-depalle/jneri/data"
+# args.model_directory = "/home/jneri/projects/def-depalle/jneri/output/SVAE/saves/RWC/221105-11105008"
+# args.output_directory = "/home/jneri/projects/def-depalle/jneri/evaluation/SVAE/RWC"
+output_path = os.path.join(args.output_directory,args.job_id)
+output_audio_path = os.path.join(output_path,"audio")
+os.makedirs(output_path,exist_ok=True)
+os.makedirs(output_audio_path,exist_ok=True)
 args.compression = .5
-args.batch_size = 32
 args.augment_level = True
 averaged = False
 
@@ -126,21 +126,15 @@ dim_data = (nfft//2+1,args.duration)
 data_root = args.data_directory + '/RWC_dataset'
 path_csv = 'test.csv'
 
-test_set = Audioset(root=data_root,path_csv=path_csv,augment_levels=args.augment_levels,duration=float(args.duration),silence=0,max_files=1)
+test_set = Audioset(root=data_root,path_csv=path_csv,augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,max_files=args.max_files)
+test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=True)
 
 mixer = Mixer(n_sources=2,average=averaged)
 pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
-
-test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=True)
-
 mixer = mixer.to(device)
 pipeline = pipeline.to(device)
 
 #%% LOAD MODEL
-
-args.num_sources = 3
-args.latent_dim = 128
-args.rnn_dim = 512
 
 dimx = dim_data[0]
 dimz = args.latent_dim
@@ -163,7 +157,7 @@ model = DCAE(
         kernel_size=kernel_size,stride=stride,padding=padding,
         )
 
-model.load_state_dict(load_state_dict(path=args.model_directory + "/svae_RWC_K{}_L1_pooled_D{}_C5-10.pt".format(args.num_sources,args.latent_dim)))
+model.load_state_dict(load_state_dict(path=os.path.join(args.model_directory,args.job_id) + "/svae_RWC_K{}_L1_pooled_D{}_C5-10.pt".format(args.num_sources,args.latent_dim)))
 model.to(device)
 model.eval()
 
@@ -176,7 +170,6 @@ SiSAR = []
 
 with torch.no_grad():
     for batch_idx, (data,_) in enumerate(test_loader):
-        # data,_ = next(iter(test_loader))
         mix, sources = mixer(data.to(device))
         mix_stft = pipeline.forward_complex(mix)
         source_stft = pipeline.forward_complex(sources)
@@ -202,19 +195,23 @@ with torch.no_grad():
         SiSAR.append(SAR)
 
         print("Evaluating {} / {} ==> ".format(batch_idx+1,len(test_loader)))
-        
+    
 
 #%%
-SI_SDR = torch.cat(SiSDR)
-SI_SIR = torch.cat(SiSIR)
-SI_SAR = torch.cat(SiSAR)
+SI_SDR = torch.cat(SiSDR).cpu()
+SI_SIR = torch.cat(SiSIR).cpu()
+SI_SAR = torch.cat(SiSAR).cpu()
 print("SI-SDR = {:4.2f}".format(SI_SDR.mean()))
 print("SI-SIR = {:4.2f}".format(SI_SIR.mean()))
 print("SI-SAR = {:4.2f}".format(SI_SAR.mean()))
 
-temp = pd.DataFrame(dict(sdr=SI_SDR.ravel(),sir=SI_SIR.ravel(),sar=SI_SAR.ravel()))
-sns.boxplot(data=temp)
-plt.savefig(args.output_directory + "/evaluation_bsseval.png")
+df = pd.DataFrame(dict(sdr=SI_SDR.mean().item(),sir=SI_SIR.mean().item(),sar=SI_SAR.mean().item()),index=[0])
+df.to_csv(output_path + '/bss_summary.csv',index=False) 
+
+df = pd.DataFrame(dict(sdr=SI_SDR.ravel(),sir=SI_SIR.ravel(),sar=SI_SAR.ravel()))
+df.to_csv(output_path + '/bss.csv',index=False) 
+sns.boxplot(data=df)
+plt.savefig(output_path + "/bss_summary.png")
 plt.close()
 # %%
 jet = cm.get_cmap('jet', 256)
@@ -223,27 +220,34 @@ newcolors[0] = (0.0,0.0,0.0,1.0)
 mycmp = ListedColormap(newcolors)
 
 #%%
+
 n = np.random.randint(mix.shape[0])
-kwds = dict(cmap=mycmp,origin='lower',aspect='auto',interpolation='none',vmin=-90,vmax=15)
+kwds = dict(cmap=mycmp,origin='lower',aspect='auto',interpolation='none',vmax=15)
 pipeline.compression = 1.0
 fig,ax = plt.subplots(args.num_sources,3,figsize=(9,3*args.num_sources))
-ax[0,0].imshow(mag2db(pipeline(mix[n])+1e-9),**kwds)
-ax[0,1].imshow(mag2db(pipeline(sources[n,0])+1e-9),**kwds)
-ax[1,1].imshow(mag2db(pipeline(sources[n,1])+1e-9),**kwds)
+ax[0,0].imshow(mag2db(pipeline(mix[n])+1e-9).cpu(),**kwds)
+ax[0,1].imshow(mag2db(pipeline(sources[n,0])+1e-9).cpu(),**kwds)
+ax[1,1].imshow(mag2db(pipeline(sources[n,1])+1e-9).cpu(),**kwds)
 for i in range(args.num_sources):
-    ax[i,2].imshow(mag2db(pipeline(estimates[n,i])+1e-9),**kwds)
+    ax[i,2].imshow(mag2db(pipeline(estimates[n,i])+1e-9).cpu(),**kwds)
 
 ax[0,0].set_title('Input Mixture')
 ax[0,1].set_title('Target')
 ax[0,2].set_title('Estimates')
-plt.savefig(args.output_directory + "/evaluation_spec.png")
+
+for i in range(1,args.num_sources):
+    ax[i,0].remove()
+for i in range(2,args.num_sources):
+    ax[i,1].remove()
+
+plt.savefig(output_audio_path + "/evaluation_spec.png")
 plt.tight_layout()
 plt.close()
 
-torchaudio.save(args.output_directory + "/mix.wav",mix[n].unsqueeze(0) / 2,16000)
+torchaudio.save(output_audio_path + "/mix.wav",mix[n].unsqueeze(0).cpu() / 2,16000)
 for i in range(sources.shape[1]):
-    torchaudio.save(args.output_directory + "/source_{}.wav".format(i+1),sources[n,i].unsqueeze(0) / 2,16000)
+    torchaudio.save(output_audio_path + "/source_{}.wav".format(i+1),sources[n,i].unsqueeze(0).cpu() / 2,16000)
 for i in range(estimates.shape[1]):
-    torchaudio.save(args.output_directory + "/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0) / 2,16000)
+    torchaudio.save(output_audio_path + "/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0).cpu() / 2,16000)
 
 # %%

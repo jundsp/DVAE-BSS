@@ -17,4 +17,5 @@ tensorboard
 soundfile
 pathlib
 pandas
+seaborn
 # samplerate

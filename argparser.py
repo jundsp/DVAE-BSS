@@ -48,8 +48,9 @@ parser.add_argument('--num-layers', type=int, default=1, metavar='fname',
 parser.add_argument('--job-id', type=str, default='local', metavar='fname',
                     help='Slurm job id')
 parser.add_argument('--compression', type=float, default=1)
-
 parser.add_argument('--init_method', default='tcp://127.0.0.1:3456', type=str, help='')
 parser.add_argument('--dist-backend', default='nccl', type=str, help='')
 parser.add_argument('--world_size', default=1, type=int, help='')
 parser.add_argument('--distributed', action='store_true', help='')
+parser.add_argument('--max-files', type=int, default=100, metavar='fname',
+                    help='max number of sounds to concatenate into single stream')

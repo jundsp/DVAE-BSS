@@ -217,7 +217,7 @@ if __name__ == "__main__":
         dim_data = (nfft//2+1,args.duration)
         train_set = Audioset(root=args.data_directory + '/RWC_dataset',path_csv='train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
         test_set =  Audioset(root=args.data_directory + '/RWC_dataset',path_csv='validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
-        mixer = Mixer(n_sources=args.num_sources)
+        mixer = Mixer(n_sources=2)
         pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
         
     # train_set.n_files = 1024
