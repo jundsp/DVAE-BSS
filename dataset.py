@@ -50,21 +50,24 @@ def walk_files(root, suffix, prefix=False, remove_suffix=False):
                     fname = fname[: -len(suffix)]
                 if prefix:
                     fname = os.path.join(root, dirName,fname)
-                yield fname, descr
+                yield fname
 
 class Audioset(Dataset):
-    def __init__(self,root,path_csv,duration=4,normalize=True,suffix='.wav',samplerate=16000,augment_levels=False,silence=.1,max_files=20):
+    def __init__(self,root,path_csv=None,duration=4,normalize=True,suffix='.wav',samplerate=16000,augment_levels=False,silence=.1,max_files=20):
         self._path = root
         self.duration = duration
         self.normalize = normalize
         self.suffix = suffix
         self.samplerate = samplerate
         self.samples = int(duration*samplerate)
-        self._walker = pd.read_csv(os.path.join(root,path_csv),header=None)[0].tolist()
         self.augment_levels = augment_levels
 
-        # walker = walk_files(self._path, suffix=suffix, prefix=True)
-        # self._walker = list(walker)
+        if path_csv is None:
+            walker = walk_files(self._path, suffix=suffix, prefix=True)
+            self._walker = list(walker)
+        else:
+            self._walker = pd.read_csv(os.path.join(root,path_csv),header=None)[0].tolist()
+           
 
         self.n_files = len(self._walker)
         self.normalize = normalize

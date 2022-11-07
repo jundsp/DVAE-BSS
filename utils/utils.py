@@ -20,11 +20,19 @@ def optimal_permute(y,x):
     n = x.size(0)
     nx = x.size(1)
     ny = y.size(1)
+    out = torch.zeros_like(y)
     for i in range(n):
         cost = torch.zeros(ny,nx)
         for j in range(ny):
             cost[j] = (y[i,j].unsqueeze(0) - x[i,:]).abs().sum(-1)
 
         _, col_ind = linear_sum_assignment(cost.detach().numpy().T)
-        y[i] = y[i,col_ind]
-    return y
+        
+
+        out[i,:nx] = y[i,col_ind]
+        if ny > nx:
+            k = np.arange(ny)
+            k_rem = np.array(list(set(k) - set(col_ind)))
+            out[i,nx:] = y[i,k_rem]
+
+    return out
