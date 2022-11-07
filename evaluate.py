@@ -17,12 +17,66 @@ from sklearn.manifold import  MDS
 import seaborn as sns
 from argparser import parser
 from utils.utils import optimal_permute
+from collections import OrderedDict
 
+#* Make a class / module to process the bss eval measures, and to do synthesis. / GPU accel
 
-jet = cm.get_cmap('jet', 256)
-newcolors = jet(np.linspace(0, 1, 256))
-newcolors[0] = (0.0,0.0,0.0,1.0)
-mycmp = ListedColormap(newcolors)
+def load_state_dict(path):
+    # original saved file with DataParallel
+    state_dict = torch.load(path,map_location=torch.device(device))
+    # create new OrderedDict that does not contain `module.`
+    
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        name = k[7:] # remove `module.`
+        new_state_dict[name] = v
+    
+    return new_state_dict
+
+def make_scale_invariant(estimates,targets):
+    k = targets.shape[1]
+    estimates = estimates[:,:k]
+    Rss = (targets * targets).sum(-1)
+    alpha = (estimates * targets).sum(-1) / Rss
+    return targets * alpha.unsqueeze(-1)
+
+def compute_measures_batch(estimates, targets, salt=1e-14):
+
+    n = targets.shape[0]
+    k = targets.shape[1]
+    
+    SDR = torch.zeros(n,k)
+    SIR = torch.zeros(n,k)
+    SAR = torch.zeros(n,k)
+
+    Rss = torch.zeros(n,k,k)
+    for ii in range(n):
+        Rss[ii] = targets[ii] @ targets[ii].T
+    
+    for jj in range(k):
+        SDR[:,jj], SIR[:,jj], SAR[:,jj] = compute_measures_batch_one(estimates=estimates[:,jj],targets=targets,Rss=Rss,j=jj,salt=salt)
+
+    return SDR, SIR, SAR
+
+def compute_measures_batch_one(estimates, targets, Rss, j, salt=1e-14):
+    e_true = targets[:,j] 
+    # Get the SIR
+    e_res= estimates - e_true
+    Rsr = (e_res.unsqueeze(1) * targets).sum(-1)
+    b = torch.linalg.solve(Rss,Rsr)
+
+    e_interf = (targets * b.unsqueeze(-1)).sum(1)
+    e_artif = e_res - e_interf
+
+    E_target = (e_true*e_true).sum(-1) + salt
+    E_residual = (e_res*e_res).sum(-1) + salt
+    E_interf = (e_interf*e_interf).sum(-1) + salt
+    E_artif = (e_artif*e_artif).sum(-1) + salt
+
+    SDR = 10*(E_target.log10() - E_residual.log10())
+    SIR = 10*(E_target.log10() - E_interf.log10())
+    SAR = 10*(E_target.log10() - E_artif.log10())
+    return SDR, SIR, SAR
 
 def mp2comp(magnitude,phase):
     Zc = magnitude*torch.exp(1j*phase)
@@ -52,10 +106,13 @@ args = parser.parse_args(args=[])
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 args.data_directory = "/Volumes/JulianSSD/data"
+args.data_directory = "/Users/julian/Documents/Code/data"
 args.duration = 4
-args.n_time = 257
+args.n_time = 513
 args.compression = .5
-args.batch_size = 4
+args.batch_size = 32
+args.augment_level = True
+averaged = False
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -64,8 +121,15 @@ kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if args.cuda else
 
 nfft = 512
 dim_data = (nfft//2+1,args.duration)
-test_set = Audioset(root=args.data_directory + '/RWC_dataset',path_csv='test.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=0,max_files=2)
-mixer = Mixer(n_sources=args.num_sources)
+
+data_root = args.data_directory + '/RWC_dataset'
+path_csv = 'test.csv'
+
+data_root = args.data_directory + '/MUMS_test'
+path_csv = None
+test_set = Audioset(root=data_root,path_csv=path_csv,augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,max_files=1)
+
+mixer = Mixer(n_sources=args.num_sources,average=averaged)
 pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
 
 test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=True)
@@ -75,6 +139,7 @@ pipeline = pipeline.to(device)
 
 #%% LOAD MODEL
 
+args.num_sources = 3
 args.latent_dim = 128
 args.rnn_dim = 512
 
@@ -99,40 +164,17 @@ model = DCAE(
         kernel_size=kernel_size,stride=stride,padding=padding,
         )
 
-model_path = "/Users/julian/Desktop/svae_RWC_K2_L1_pooled_D128.pt"
-# original saved file with DataParallel
-state_dict = torch.load(model_path,map_location=torch.device(device))
-# create new OrderedDict that does not contain `module.`
-from collections import OrderedDict
-new_state_dict = OrderedDict()
-for k, v in state_dict.items():
-    name = k[7:] # remove `module.`
-    new_state_dict[name] = v
-# load params
-model.load_state_dict(new_state_dict)
-
-
-#%% EVALUATE
-
-def si_sdr(estimate,target,salt=1e-14):
-    Rss = (target * target).sum(-1)
-    alpha = (estimate * target).sum(-1) / Rss
-    e_target = target * alpha.unsqueeze(-1)
-    e_residual = estimate - e_target
-    E_target = (e_target * e_target).sum(-1) + salt
-    E_residual = (e_residual * e_residual).sum(-1) + salt
-
-    output = 10*(E_target.log10() - E_residual.log10())
-    return output
-
+model.load_state_dict(load_state_dict(path="/Users/julian/Desktop/svae_RWC_K{}_L1_pooled_D{}_C5-10.pt".format(args.num_sources,args.latent_dim)))
+model.to(device)
 model.eval()
 
-Mix = []
-Targets = []
-Estimates = []
+#%% EVALUATE
+torch.manual_seed(args.seed)
+np.random.seed(args.seed)
 SiSDR = []
+SiSIR = []
+SiSAR = []
 
-#%%
 with torch.no_grad():
     # for batch_idx, (data,_) in enumerate(test_loader):
     data,_ = next(iter(test_loader))
@@ -143,7 +185,8 @@ with torch.no_grad():
     data = mix_stft.abs()
     output = model(data)
 
-    m_hat = create_masks(data,output['recon_s'])
+    s_hat = output['recon_s']
+    m_hat = create_masks(data,s_hat)
     estimates_stft = m_hat * torch.exp(1j*mix_stft.angle().unsqueeze(1))
 
     mix = pipeline.invert(mix_stft)
@@ -151,34 +194,57 @@ with torch.no_grad():
     estimates = pipeline.invert(estimates_stft)
 
     estimates = optimal_permute(estimates,sources)
+    sources_invariant = make_scale_invariant(estimates=estimates,targets=sources)
 
-    sisdr = si_sdr(estimate=estimates,target=sources)
+    SDR, SIR, SAR = compute_measures_batch(estimates=estimates,targets=sources_invariant)
+    
+    SiSDR.append(SDR)
+    SiSIR.append(SIR)
+    SiSAR.append(SAR)
 
-    Mix.append(mix)
-    Targets.append(sources)
-    Estimates.append(estimates)
-    SiSDR.append(sisdr)
+        # print("Evaluating {} / {} ==> ".format(batch_idx+1,len(test_loader)))
+        
 
+#%%
+SI_SDR = torch.cat(SiSDR)
+SI_SIR = torch.cat(SiSIR)
+SI_SAR = torch.cat(SiSAR)
+print("SI-SDR = {:4.2f}".format(SI_SDR.mean()))
+print("SI-SIR = {:4.2f}".format(SI_SIR.mean()))
+print("SI-SAR = {:4.2f}".format(SI_SAR.mean()))
 
+temp = pd.DataFrame(dict(sdr=SI_SDR.ravel(),sir=SI_SIR.ravel(),sar=SI_SAR.ravel()))
+sns.boxplot(data=temp)
 # %%
-n = 1
-kwds = dict(cmap='jet',origin='lower',aspect='auto',interpolation='none',vmin=-100)
-fig,ax = plt.subplots(2,3,figsize=(7,4))
-ax[0,0].imshow(mag2db(pipeline(mix[n])+1e-8),**kwds)
-ax[0,1].imshow(mag2db(pipeline(sources[n,0])+1e-8),**kwds)
-ax[1,1].imshow(mag2db(pipeline(sources[n,1])+1e-8),**kwds)
-ax[0,2].imshow(mag2db(pipeline(estimates[n,0])+1e-8),**kwds)
-ax[1,2].imshow(mag2db(pipeline(estimates[n,1])+1e-8),**kwds)
+jet = cm.get_cmap('jet', 256)
+newcolors = jet(np.linspace(0, 1, 256))
+# newcolors[0] = (0.0,0.0,0.0,1.0)
+mycmp = ListedColormap(newcolors)
+
+#%%
+n = np.random.randint(mix.shape[0])
+kwds = dict(cmap=mycmp,origin='lower',aspect='auto',interpolation='none',vmin=-60,vmax=10)
+pipeline.compression = 1.09
+fig,ax = plt.subplots(args.num_sources,3,figsize=(9,3*args.num_sources))
+ax[0,0].imshow(mag2db(pipeline(mix[n])+1e-3),**kwds)
+ax[0,1].imshow(mag2db(pipeline(sources[n,0])+1e-3),**kwds)
+ax[1,1].imshow(mag2db(pipeline(sources[n,1])+1e-3),**kwds)
+ax[0,2].imshow(mag2db(pipeline(estimates[n,0])+1e-3),**kwds)
+ax[1,2].imshow(mag2db(pipeline(estimates[n,1])+1e-3),**kwds)
+ax[2,2].imshow(mag2db(pipeline(estimates[n,2])+1e-3),**kwds)
 ax[1,0].remove()
+ax[2,0].remove()
+ax[2,1].remove()
 
 ax[0,0].set_title('Input Mixture')
 ax[0,1].set_title('Target')
 ax[0,2].set_title('Estimates')
 plt.tight_layout()
 
-# %%
-torchaudio.save("/Users/julian/Desktop/mix.wav",mix[n].unsqueeze(0),16000)
+
+torchaudio.save("/Users/julian/Desktop/mix.wav",mix[n].unsqueeze(0) / 2,16000)
 for i in range(sources.shape[1]):
-    torchaudio.save("/Users/julian/Desktop/source_{}.wav".format(i+1),sources[n,i].unsqueeze(0),16000)
-    torchaudio.save("/Users/julian/Desktop/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0),16000)
+    torchaudio.save("/Users/julian/Desktop/source_{}.wav".format(i+1),sources[n,i].unsqueeze(0) / 2,16000)
+    torchaudio.save("/Users/julian/Desktop/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0) / 2,16000)
+
 # %%
