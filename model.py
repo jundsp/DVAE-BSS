@@ -223,9 +223,7 @@ class DCAE(DSAE):
         self.freq_features = dimx // (2**(n_feature_layers+1)) + (dimx % 2) 
         self.encoded_features = self.freq_features * self.conv_channels
         self.n_feat_encoded = dimg * num_sources
-        # dimh = dimg
-        # dimz = dimh
-        # chans = dimg
+
         chans = (dimz + dimg) // 2
         dimx = 1
         self.dimx, self.dimz, self.dimh, self.dimg = dimx, dimz, dimh, dimg
