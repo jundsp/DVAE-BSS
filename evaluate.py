@@ -18,7 +18,9 @@ from utils.utils import optimal_permute
 from collections import OrderedDict
 import seaborn as sns
 
-#* Make a class / module to process the bss eval measures, and to do synthesis. / GPU accel
+#* Make a class / module to process the bss eval measures.
+
+#* Save the measures per source, sorted (1st best, 2nd best)
 
 def load_state_dict(path):
     # original saved file with DataParallel
@@ -101,12 +103,10 @@ def dict_average(input):
     return avg
 
 #%%
-args = parser.parse_args()
+args = parser.parse_args(args=[])
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
-# args.data_directory = "~/projects/def-depalle/jneri/data"
-# args.model_directory = "/home/jneri/projects/def-depalle/jneri/output/SVAE/saves/RWC/221105-11105008"
-# args.output_directory = "/home/jneri/projects/def-depalle/jneri/evaluation/SVAE/RWC"
+args.data_directory = "/Users/julian/Documents/Code/data"
 output_path = os.path.join(args.output_directory,args.job_id)
 output_audio_path = os.path.join(output_path,"audio")
 os.makedirs(output_path,exist_ok=True)
@@ -125,6 +125,9 @@ dim_data = (nfft//2+1,args.duration)
 
 data_root = args.data_directory + '/RWC_dataset'
 path_csv = 'test.csv'
+
+# data_root = args.data_directory + '/MUMS_test'
+# path_csv = None
 
 test_set = Audioset(root=data_root,path_csv=path_csv,augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,max_files=args.max_files)
 test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=True)
@@ -157,7 +160,7 @@ model = DCAE(
         kernel_size=kernel_size,stride=stride,padding=padding,
         )
 
-model.load_state_dict(load_state_dict(path=os.path.join(args.model_directory,args.job_id) + "/svae_RWC_K{}_L1_pooled_D{}_C5-10.pt".format(args.num_sources,args.latent_dim)))
+# model.load_state_dict(load_state_dict(path=os.path.join(args.model_directory,args.job_id) + "/svae_RWC_K{}_L1_pooled_D{}_C5-10.pt".format(args.num_sources,args.latent_dim)))
 model.to(device)
 model.eval()
 
@@ -167,6 +170,7 @@ np.random.seed(args.seed)
 SiSDR = []
 SiSIR = []
 SiSAR = []
+Idx = []
 
 with torch.no_grad():
     for batch_idx, (data,_) in enumerate(test_loader):
@@ -193,14 +197,15 @@ with torch.no_grad():
         SiSDR.append(SDR)
         SiSIR.append(SIR)
         SiSAR.append(SAR)
+        Idx.append(torch.stack([1+torch.arange(SDR.shape[-1])]*SDR.shape[0],0))
 
         print("Evaluating {} / {} ==> ".format(batch_idx+1,len(test_loader)))
     
-
 #%%
 SI_SDR = torch.cat(SiSDR).cpu()
 SI_SIR = torch.cat(SiSIR).cpu()
 SI_SAR = torch.cat(SiSAR).cpu()
+Index = torch.cat(Idx).cpu()
 print("SI-SDR = {:4.2f}".format(SI_SDR.mean()))
 print("SI-SIR = {:4.2f}".format(SI_SIR.mean()))
 print("SI-SAR = {:4.2f}".format(SI_SAR.mean()))
@@ -208,10 +213,13 @@ print("SI-SAR = {:4.2f}".format(SI_SAR.mean()))
 df = pd.DataFrame(dict(sdr=SI_SDR.mean().item(),sir=SI_SIR.mean().item(),sar=SI_SAR.mean().item()),index=[0])
 df.to_csv(output_path + '/bss_summary.csv',index=False) 
 
-df = pd.DataFrame(dict(sdr=SI_SDR.ravel(),sir=SI_SIR.ravel(),sar=SI_SAR.ravel()))
+df = pd.DataFrame(dict(SDR=SI_SDR.ravel(),SIR=SI_SIR.ravel(),SAR=SI_SAR.ravel(),Source=Index.ravel()))
 df.to_csv(output_path + '/bss.csv',index=False) 
-sns.boxplot(data=df)
-plt.savefig(output_path + "/bss_summary.png")
+dfm = df.melt(id_vars=['Source'],value_vars=['SDR','SIR','SAR'])
+sns.boxplot(data=dfm,x='variable',y='value',hue='Source')
+plt.grid()
+plt.tight_layout()
+plt.savefig(output_path + "/bss.pdf")
 plt.close()
 # %%
 jet = cm.get_cmap('jet', 256)
