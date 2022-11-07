@@ -80,7 +80,7 @@ class Audioset(Dataset):
         
         waveform, samplerate = torchaudio.load(os.path.join(self._path,path))
         if waveform.ndim > 1:
-            waveform = waveform[0]
+            waveform = waveform.mean(0)
             
         if samplerate != self.samplerate:
             try:
@@ -339,8 +339,12 @@ class Mixer(torch.nn.Module):
             return waveform, waveform.unsqueeze(1)
         else:
             n_batch = waveform.shape[0]
-            perms = torch.roll(torch.arange(n_batch),1)
-            sources = torch.stack([waveform,waveform[perms]],1)
+            sources = []
+            perms = torch.arange(n_batch)
+            for i in range(self.n_sources):
+                sources.append(waveform[perms])
+                perms = torch.roll(perms,1)
+            sources = torch.stack(sources,1)
             if self.average:
                 sources /= sources.shape[1]
             mix = sources.sum(1)
