@@ -28,7 +28,6 @@ def optimal_permute(y,x):
 
         _, col_ind = linear_sum_assignment(cost.detach().numpy().T)
         
-
         out[i,:nx] = y[i,col_ind]
         if ny > nx:
             k = np.arange(ny)

@@ -106,7 +106,8 @@ args = parser.parse_args(args=[])
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 args.data_directory = "/Volumes/JulianSSD/data"
-args.data_directory = "/Users/julian/Documents/Code/data"
+args.model_directory = "/Users/julian/Desktop"
+args.output_directory = "/Users/julian/Desktop"
 args.duration = 4
 args.n_time = 513
 args.compression = .5
@@ -125,11 +126,9 @@ dim_data = (nfft//2+1,args.duration)
 data_root = args.data_directory + '/RWC_dataset'
 path_csv = 'test.csv'
 
-data_root = args.data_directory + '/MUMS_test'
-path_csv = None
-test_set = Audioset(root=data_root,path_csv=path_csv,augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,max_files=1)
+test_set = Audioset(root=data_root,path_csv=path_csv,augment_levels=args.augment_levels,duration=float(args.duration),silence=0,max_files=1)
 
-mixer = Mixer(n_sources=args.num_sources,average=averaged)
+mixer = Mixer(n_sources=2,average=averaged)
 pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
 
 test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=True)
@@ -164,7 +163,7 @@ model = DCAE(
         kernel_size=kernel_size,stride=stride,padding=padding,
         )
 
-model.load_state_dict(load_state_dict(path="/Users/julian/Desktop/svae_RWC_K{}_L1_pooled_D{}_C5-10.pt".format(args.num_sources,args.latent_dim)))
+model.load_state_dict(load_state_dict(path=args.model_directory + "/svae_RWC_K{}_L1_pooled_D{}_C5-10.pt".format(args.num_sources,args.latent_dim)))
 model.to(device)
 model.eval()
 
@@ -176,33 +175,33 @@ SiSIR = []
 SiSAR = []
 
 with torch.no_grad():
-    # for batch_idx, (data,_) in enumerate(test_loader):
-    data,_ = next(iter(test_loader))
-    mix, sources = mixer(data.to(device))
-    mix_stft = pipeline.forward_complex(mix)
-    source_stft = pipeline.forward_complex(sources)
+    for batch_idx, (data,_) in enumerate(test_loader):
+        # data,_ = next(iter(test_loader))
+        mix, sources = mixer(data.to(device))
+        mix_stft = pipeline.forward_complex(mix)
+        source_stft = pipeline.forward_complex(sources)
 
-    data = mix_stft.abs()
-    output = model(data)
+        data = mix_stft.abs()
+        output = model(data)
 
-    s_hat = output['recon_s']
-    m_hat = create_masks(data,s_hat)
-    estimates_stft = m_hat * torch.exp(1j*mix_stft.angle().unsqueeze(1))
+        s_hat = output['recon_s']
+        m_hat = create_masks(data,s_hat)
+        estimates_stft = m_hat * torch.exp(1j*mix_stft.angle().unsqueeze(1))
 
-    mix = pipeline.invert(mix_stft)
-    sources = pipeline.invert(source_stft)
-    estimates = pipeline.invert(estimates_stft)
+        mix = pipeline.invert(mix_stft)
+        sources = pipeline.invert(source_stft)
+        estimates = pipeline.invert(estimates_stft)
 
-    estimates = optimal_permute(estimates,sources)
-    sources_invariant = make_scale_invariant(estimates=estimates,targets=sources)
+        estimates = optimal_permute(estimates,sources)
+        sources_invariant = make_scale_invariant(estimates=estimates,targets=sources)
 
-    SDR, SIR, SAR = compute_measures_batch(estimates=estimates,targets=sources_invariant)
-    
-    SiSDR.append(SDR)
-    SiSIR.append(SIR)
-    SiSAR.append(SAR)
+        SDR, SIR, SAR = compute_measures_batch(estimates=estimates,targets=sources_invariant)
+        
+        SiSDR.append(SDR)
+        SiSIR.append(SIR)
+        SiSAR.append(SAR)
 
-        # print("Evaluating {} / {} ==> ".format(batch_idx+1,len(test_loader)))
+        print("Evaluating {} / {} ==> ".format(batch_idx+1,len(test_loader)))
         
 
 #%%
@@ -215,36 +214,36 @@ print("SI-SAR = {:4.2f}".format(SI_SAR.mean()))
 
 temp = pd.DataFrame(dict(sdr=SI_SDR.ravel(),sir=SI_SIR.ravel(),sar=SI_SAR.ravel()))
 sns.boxplot(data=temp)
+plt.savefig(args.output_directory + "/evaluation_bsseval.png")
+plt.close()
 # %%
 jet = cm.get_cmap('jet', 256)
 newcolors = jet(np.linspace(0, 1, 256))
-# newcolors[0] = (0.0,0.0,0.0,1.0)
+newcolors[0] = (0.0,0.0,0.0,1.0)
 mycmp = ListedColormap(newcolors)
 
 #%%
 n = np.random.randint(mix.shape[0])
-kwds = dict(cmap=mycmp,origin='lower',aspect='auto',interpolation='none',vmin=-60,vmax=10)
-pipeline.compression = 1.09
+kwds = dict(cmap=mycmp,origin='lower',aspect='auto',interpolation='none',vmin=-90,vmax=15)
+pipeline.compression = 1.0
 fig,ax = plt.subplots(args.num_sources,3,figsize=(9,3*args.num_sources))
-ax[0,0].imshow(mag2db(pipeline(mix[n])+1e-3),**kwds)
-ax[0,1].imshow(mag2db(pipeline(sources[n,0])+1e-3),**kwds)
-ax[1,1].imshow(mag2db(pipeline(sources[n,1])+1e-3),**kwds)
-ax[0,2].imshow(mag2db(pipeline(estimates[n,0])+1e-3),**kwds)
-ax[1,2].imshow(mag2db(pipeline(estimates[n,1])+1e-3),**kwds)
-ax[2,2].imshow(mag2db(pipeline(estimates[n,2])+1e-3),**kwds)
-ax[1,0].remove()
-ax[2,0].remove()
-ax[2,1].remove()
+ax[0,0].imshow(mag2db(pipeline(mix[n])+1e-9),**kwds)
+ax[0,1].imshow(mag2db(pipeline(sources[n,0])+1e-9),**kwds)
+ax[1,1].imshow(mag2db(pipeline(sources[n,1])+1e-9),**kwds)
+for i in range(args.num_sources):
+    ax[i,2].imshow(mag2db(pipeline(estimates[n,i])+1e-9),**kwds)
 
 ax[0,0].set_title('Input Mixture')
 ax[0,1].set_title('Target')
 ax[0,2].set_title('Estimates')
+plt.savefig(args.output_directory + "/evaluation_spec.png")
 plt.tight_layout()
+plt.close()
 
-
-torchaudio.save("/Users/julian/Desktop/mix.wav",mix[n].unsqueeze(0) / 2,16000)
+torchaudio.save(args.output_directory + "/mix.wav",mix[n].unsqueeze(0) / 2,16000)
 for i in range(sources.shape[1]):
-    torchaudio.save("/Users/julian/Desktop/source_{}.wav".format(i+1),sources[n,i].unsqueeze(0) / 2,16000)
-    torchaudio.save("/Users/julian/Desktop/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0) / 2,16000)
+    torchaudio.save(args.output_directory + "/source_{}.wav".format(i+1),sources[n,i].unsqueeze(0) / 2,16000)
+for i in range(estimates.shape[1]):
+    torchaudio.save(args.output_directory + "/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0) / 2,16000)
 
 # %%

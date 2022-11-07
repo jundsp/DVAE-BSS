@@ -35,14 +35,16 @@ parser.add_argument('--duration', type=float, default=8, metavar='fname',
                     help='duration in seconds')
 parser.add_argument('--n-time', type=int, default=513, metavar='N',
                     help='Time frames')
-parser.add_argument('--data-directory', type=str, default='/Users/julian/Documents/Code/data/mnist', metavar='fname',
+parser.add_argument('--data-directory', type=str, default='/Users/julian/Documents/Code/data', metavar='fname',
                     help='Folder containing the spectrogram data')
+parser.add_argument('--output-directory', type=str, default='/Users/julian/Desktop', metavar='fname',
+                    help='Folder to save output data')
+parser.add_argument('--model-directory', type=str, default='/Users/julian/Desktop', metavar='fname',
+                    help='Folder that has models.')
 parser.add_argument('--net-type', type=str, default='pooled', metavar='fname',
                     help='name of the dataset')
 parser.add_argument('--num-layers', type=int, default=1, metavar='fname',
                     help='number of sources in the model')
-parser.add_argument('--output-directory', type=str, default='results', metavar='fname',
-                    help='Folder containing the spectrogram data')
 parser.add_argument('--job-id', type=str, default='local', metavar='fname',
                     help='Slurm job id')
 parser.add_argument('--compression', type=float, default=1)
