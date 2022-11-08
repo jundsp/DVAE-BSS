@@ -218,7 +218,7 @@ df.to_csv(output_path + '/bss_summary.csv',index=False)
 df = pd.DataFrame(dict(SDR=SI_SDR.ravel(),SIR=SI_SIR.ravel(),SAR=SI_SAR.ravel(),Source=Index.ravel()))
 df.to_csv(output_path + '/bss.csv',index=False) 
 dfm = df.melt(id_vars=['Source'],value_vars=['SDR','SIR','SAR'])
-sns.boxplot(data=dfm,x='variable',y='value',hue='Source')
+sns.boxplot(data=dfm,x='variable',y='value',hue='Source',showfliers=False)
 plt.grid()
 plt.tight_layout()
 plt.savefig(output_path + "/bss.png")
@@ -231,7 +231,7 @@ mycmp = ListedColormap(newcolors)
 
 #%%
 
-n = np.random.randint(mix.shape[0])
+n = mix.shape[0]-2
 kwds = dict(cmap=mycmp,origin='lower',aspect='auto',interpolation='none',vmax=15)
 pipeline.compression = 1.0
 fig,ax = plt.subplots(args.num_sources,3,figsize=(9,3*args.num_sources))
