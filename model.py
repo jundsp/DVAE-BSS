@@ -233,7 +233,7 @@ class DCAE(DSAE):
         self.gru_generate = nn.LSTM(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
         self.gru_infer = nn.LSTM(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
         
-        # self.gru_feature = nn.LSTM(self.n_feat_encoded,self.n_feat_encoded,num_layers=self.num_layers,bidirectional=False,batch_first=True)
+        self.gru_feature = nn.LSTM(self.n_feat_encoded,self.n_feat_encoded,num_layers=self.num_layers,bidirectional=False,batch_first=True)
 
         self.make_transition_nets(dimg,chans,dimz,dimh)
         self.fc_encoder = nn.Sequential(

@@ -103,10 +103,10 @@ def dict_average(input):
     return avg
 
 #%%
-args = parser.parse_args(args=[])
+args = parser.parse_args()
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
-args.data_directory = "/Users/julian/Documents/Code/data"
+# args.data_directory = "/Users/julian/Documents/Code/data"
 output_path = os.path.join(args.output_directory,args.job_id)
 output_audio_path = os.path.join(output_path,"audio")
 os.makedirs(output_path,exist_ok=True)
@@ -160,7 +160,7 @@ model = DCAE(
         kernel_size=kernel_size,stride=stride,padding=padding,
         )
 
-# model.load_state_dict(load_state_dict(path=os.path.join(args.model_directory,args.job_id) + "/svae_RWC_K{}_L1_pooled_D{}_C5-10.pt".format(args.num_sources,args.latent_dim)))
+model.load_state_dict(load_state_dict(path=os.path.join(args.model_directory,args.job_id) + "/svae_RWC_K{}_L1_pooled_D{}_C5-10.pt".format(args.num_sources,args.latent_dim)))
 model.to(device)
 model.eval()
 
@@ -193,11 +193,13 @@ with torch.no_grad():
         sources_invariant = make_scale_invariant(estimates=estimates,targets=sources)
 
         SDR, SIR, SAR = compute_measures_batch(estimates=estimates,targets=sources_invariant)
+
+        _,idx = torch.sort(SDR)
         
         SiSDR.append(SDR)
         SiSIR.append(SIR)
         SiSAR.append(SAR)
-        Idx.append(torch.stack([1+torch.arange(SDR.shape[-1])]*SDR.shape[0],0))
+        Idx.append(idx)
 
         print("Evaluating {} / {} ==> ".format(batch_idx+1,len(test_loader)))
     
@@ -219,7 +221,7 @@ dfm = df.melt(id_vars=['Source'],value_vars=['SDR','SIR','SAR'])
 sns.boxplot(data=dfm,x='variable',y='value',hue='Source')
 plt.grid()
 plt.tight_layout()
-plt.savefig(output_path + "/bss.pdf")
+plt.savefig(output_path + "/bss.png")
 plt.close()
 # %%
 jet = cm.get_cmap('jet', 256)
