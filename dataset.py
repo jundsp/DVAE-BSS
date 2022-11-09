@@ -53,7 +53,7 @@ def walk_files(root, suffix, prefix=False, remove_suffix=False):
                 yield fname
 
 class Audioset(Dataset):
-    def __init__(self,root,path_csv=None,duration=4,normalize=True,suffix='.wav',samplerate=16000,augment_levels=False,silence=.1,max_files=20):
+    def __init__(self,root,path_csv=None,duration=4,normalize=True,suffix='.wav',samplerate=16000,augment_levels=False,silence=.1,max_files=20,starting=0):
         self._path = root
         self.duration = duration
         self.normalize = normalize
@@ -61,6 +61,10 @@ class Audioset(Dataset):
         self.samplerate = samplerate
         self.samples = int(duration*samplerate)
         self.augment_levels = augment_levels
+
+        starting = np.maximum(0.0,float(starting))
+        silence = np.maximum(0.0, float(silence))
+        
 
         if path_csv is None:
             walker = walk_files(self._path, suffix=suffix, prefix=True)
@@ -72,6 +76,7 @@ class Audioset(Dataset):
         self.n_files = len(self._walker)
         self.normalize = normalize
         self.silence_samples = int(silence*samplerate)+1
+        self.starting_samples = int(starting*samplerate) + 1
         self.dbmin = 30
         self.max_files = max_files
         
@@ -104,9 +109,11 @@ class Audioset(Dataset):
         while flag is True:
             waveform = self._load_audio(k)
             N = len(waveform)
+            starting = np.random.randint(self.starting_samples)
+            N -= starting
             if (N+L) >= self.samples:
                 N = self.samples - L
-            output[L:L+N] = waveform[:N]
+            output[L:L+N] = waveform[starting:starting+N]
             L += N
             S = np.random.randint(self.silence_samples)
             L += S
@@ -354,16 +361,24 @@ class Mixer(torch.nn.Module):
 #%%
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    
-    transform = transforms.Compose([Shift(shift_amount=.1)])
-    dataset = Audioset(root='/home/jneri/projects/def-depalle/jneri/data',duration=8,transform=transform,path_csv='rwc_dataset/test.csv')
+
+    dataset = Audioset(root='/home/jneri/projects/def-depalle/jneri/data/VCTK',duration=4,path_csv='test.csv',silence=.5,starting=1,max_files=4,augment_levels=True)
     dataloader = torch.utils.data.DataLoader(dataset,batch_size=16,shuffle=True)
+    pipeline = AudioPipeline(n_fft=512,n_time=513,hop_length=128,compression=.5)
+    mixer = Mixer(n_sources=2)
     #%%
-    x = next(iter(dataloader))
+    x,_ = next(iter(dataloader))
+    
+    
+    data,sources = mixer(x)
+    X = pipeline(data)
+    S = pipeline(sources)
+    
     #%%
-    pipeline = AudioPipeline(n_time=256,hop_length=128,compression=.5)
-    X = pipeline(x)
-    #%%
-    plt.imshow(X[11],aspect='auto',origin='lower',cmap='jet')
+    n = np.random.randint(X.shape[0])
+    fig,ax = plt.subplots(3,figsize=(6,6))
+    ax[0].imshow(mag2db(X[n]),aspect='auto',origin='lower',cmap='jet')
+    ax[1].imshow(mag2db(S[n,0]),aspect='auto',origin='lower',cmap='jet')
+    ax[2].imshow(mag2db(S[n,1]),aspect='auto',origin='lower',cmap='jet')
     
 # %%
