@@ -10,6 +10,7 @@ import argparse
 import torchaudio
 import torch
 # import samplerate
+import argparse
 
 def walk_files(root, suffix, prefix=False, remove_suffix=False):
     root = os.path.expanduser(root)
@@ -23,13 +24,20 @@ def walk_files(root, suffix, prefix=False, remove_suffix=False):
                     fname = os.path.join(root, dirName,fname)
                 yield fname, descr
 
-data_path = Path('/home/jneri/projects/def-depalle/jneri/data/VCTK')
-audio_path = 'wav48_silence_trimmed'
+
+
+parser = argparse.ArgumentParser(description='DSAE Example')
+parser.add_argument('--data-path', type=str, default='/home/jneri/projects/def-depalle/jneri/data/RWC_dataset', metavar='N',
+                    help='input batch size for training (default: 512)')
+args = parser.parse_args()
+
+data_path = Path(args.data_path)
+audio_path = 'audio'
 input_path = data_path.joinpath(audio_path)
-output_path =data_path.joinpath("wav16k")
+output_path =data_path.joinpath("wav16")
 os.makedirs(output_path,exist_ok=True)
 
-input_suffix = '.flac'
+input_suffix = '.wav'
 output_suffix = '.wav'
 
 walker = walk_files(input_path, suffix=input_suffix, prefix=True)

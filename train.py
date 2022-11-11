@@ -223,13 +223,18 @@ if __name__ == "__main__":
     if args.dataset == 'VCTK':
         nfft = 512
         dim_data = (nfft//2+1,args.duration)
-        train_set = Audioset(root=args.data_directory + '/VCTK',path_csv='train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
-        test_set =  Audioset(root=args.data_directory + '/VCTK',path_csv='validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=2)
+        train_set = Audioset(root=args.data_directory + '/VCTK',path_csv='train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.1,starting=.5)
+        test_set =  Audioset(root=args.data_directory + '/VCTK',path_csv='validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.1,starting=.5)
         mixer = Mixer(n_sources=2)
         pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
-        
-    # train_set.n_files = 1024
-    # test_set.n_files = 1024
+
+    if args.dataset == 'composite':
+        nfft = 512
+        dim_data = (nfft//2+1,args.duration)
+        train_set = Audioset(root=args.data_directory,path_csv='composite/train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
+        test_set =  Audioset(root=args.data_directory,path_csv='composite/validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
+        mixer = Mixer(n_sources=2)
+        pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
     
     print('From Rank: {}, ==> Preparing data..'.format(rank))
     
@@ -308,7 +313,7 @@ if __name__ == "__main__":
         )
         
     model.to(device)
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[current_device],find_unused_parameters=True)
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[current_device])
     
     lossfun = LossFunction().to(device)
 
@@ -322,5 +327,5 @@ if __name__ == "__main__":
         test_info = test(epoch,lossfun=lossfun,test_loader=test_loader,test_rank=rank)
         
         if epoch % args.save_interval == 0:
-            torch.save(model.state_dict(),model_name)
+            torch.save(model.module.state_dict(),model_name)
 

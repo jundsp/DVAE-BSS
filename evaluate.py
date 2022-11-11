@@ -17,6 +17,7 @@ from argparser import parser
 from utils.utils import optimal_permute
 from collections import OrderedDict
 import seaborn as sns
+from utils.utils import torchToNumpy, mag2db
 
 #* Make a class / module to process the bss eval measures.
 
@@ -106,13 +107,12 @@ def dict_average(input):
 args = parser.parse_args()
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
-# args.data_directory = "/Users/julian/Documents/Code/data"
+
+#%%
 output_path = os.path.join(args.output_directory,args.job_id)
 output_audio_path = os.path.join(output_path,"audio")
 os.makedirs(output_path,exist_ok=True)
 os.makedirs(output_audio_path,exist_ok=True)
-args.compression = .5
-args.augment_level = True
 averaged = False
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -126,8 +126,9 @@ dim_data = (nfft//2+1,args.duration)
 data_root = args.data_directory + '/RWC_dataset'
 path_csv = 'test.csv'
 
-# data_root = args.data_directory + '/MUMS_test'
-# path_csv = None
+if args.dataset == 'composite':
+    data_root = args.data_directory
+    path_csv = 'composite/test.csv'
 
 test_set = Audioset(root=data_root,path_csv=path_csv,augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,max_files=args.max_files)
 test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=True)
@@ -230,34 +231,35 @@ newcolors[0] = (0.0,0.0,0.0,1.0)
 mycmp = ListedColormap(newcolors)
 
 #%%
-
-n = mix.shape[0]-2
 kwds = dict(cmap=mycmp,origin='lower',aspect='auto',interpolation='none',vmax=15)
 pipeline.compression = 1.0
-fig,ax = plt.subplots(args.num_sources,3,figsize=(9,3*args.num_sources))
-ax[0,0].imshow(mag2db(pipeline(mix[n])+1e-9).cpu(),**kwds)
-ax[0,1].imshow(mag2db(pipeline(sources[n,0])+1e-9).cpu(),**kwds)
-ax[1,1].imshow(mag2db(pipeline(sources[n,1])+1e-9).cpu(),**kwds)
-for i in range(args.num_sources):
-    ax[i,2].imshow(mag2db(pipeline(estimates[n,i])+1e-9).cpu(),**kwds)
+for n in range(8):
+    output_audio_path_n = output_audio_path + "/ex_{}".format(n+1)
+    os.makedirs(output_audio_path_n,exist_ok=True)
 
-ax[0,0].set_title('Input Mixture')
-ax[0,1].set_title('Target')
-ax[0,2].set_title('Estimates')
+    fig,ax = plt.subplots(args.num_sources,3,figsize=(9,3*args.num_sources))
+    ax[0,0].imshow(mag2db(pipeline(mix[n])+1e-9).cpu(),**kwds)
+    ax[0,1].imshow(mag2db(pipeline(sources[n,0])+1e-9).cpu(),**kwds)
+    ax[1,1].imshow(mag2db(pipeline(sources[n,1])+1e-9).cpu(),**kwds)
+    for i in range(args.num_sources):
+        ax[i,2].imshow(mag2db(pipeline(estimates[n,i])+1e-9).cpu(),**kwds)
 
-for i in range(1,args.num_sources):
-    ax[i,0].remove()
-for i in range(2,args.num_sources):
-    ax[i,1].remove()
+    ax[0,0].set_title('Input Mixture')
+    ax[0,1].set_title('Target')
+    ax[0,2].set_title('Estimates')
 
-plt.savefig(output_audio_path + "/evaluation_spec.png")
-plt.tight_layout()
-plt.close()
+    for i in range(1,args.num_sources):
+        ax[i,0].remove()
+    for i in range(2,args.num_sources):
+        ax[i,1].remove()
 
-torchaudio.save(output_audio_path + "/mix.wav",mix[n].unsqueeze(0).cpu() / 2,16000)
-for i in range(sources.shape[1]):
-    torchaudio.save(output_audio_path + "/source_{}.wav".format(i+1),sources[n,i].unsqueeze(0).cpu() / 2,16000)
-for i in range(estimates.shape[1]):
-    torchaudio.save(output_audio_path + "/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0).cpu() / 2,16000)
 
-# %%
+    plt.savefig(output_audio_path_n + "/evaluation_spec.png")
+    plt.tight_layout()
+    plt.close()
+
+    torchaudio.save(output_audio_path_n + "/mix.wav",mix[n].unsqueeze(0).cpu() / 2,16000)
+    for i in range(sources.shape[1]):
+        torchaudio.save(output_audio_path_n + "/source_{}.wav".format(i+1),sources[n,i].unsqueeze(0).cpu() / 2,16000)
+    for i in range(estimates.shape[1]):
+        torchaudio.save(output_audio_path_n + "/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0).cpu() / 2,16000)

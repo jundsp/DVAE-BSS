@@ -145,13 +145,13 @@ class DSAE(nn.Module):
     
     def sample_latent(self,N,M,device):
         MK = M * self.num_sources
-        z = torch.zeros(MK,N,self.dimz,device=device)
-        h = torch.zeros(MK,N,self.dimh,device=device)
-        h_t = torch.zeros(self.num_layers,MK,self.dimh,device=device)
-        c_t = torch.zeros(self.num_layers,MK,self.dimh,device=device)
-        prior_mean = self.batch_and_source(self.smu0,M)
-        prior_logvar = self.batch_and_source(self.slogvar0,M)
-        z_t = torch.randn(MK,1,self.dimz,device=device)*torch.exp(0.5*prior_logvar) + prior_mean
+        z = torch.zeros(MK,N,self.dimz).to(device)
+        h = torch.zeros(MK,N,self.dimh).to(device)
+        h_t = torch.zeros(self.num_layers,MK,self.dimh).to(device)
+        c_t = torch.zeros(self.num_layers,MK,self.dimh).to(device)
+        prior_mean = self.batch_and_source(self.smu0,M).to(device)
+        prior_logvar = self.batch_and_source(self.slogvar0,M).to(device)
+        z_t = torch.randn(MK,1,self.dimz).to(device)*torch.exp(0.5*prior_logvar) + prior_mean
         for n in range(N):
             _,(h_t,c_t) = self.gru_generate(z_t,(h_t,c_t))
             zh = self.combiner(z_t,h_t[-1].unsqueeze(1))

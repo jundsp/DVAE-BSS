@@ -70,6 +70,7 @@ class Audioset(Dataset):
             walker = walk_files(self._path, suffix=suffix, prefix=True)
             self._walker = list(walker)
         else:
+            print(os.path.join(root,path_csv))
             self._walker = pd.read_csv(os.path.join(root,path_csv),header=None)[0].tolist()
            
 
@@ -88,13 +89,16 @@ class Audioset(Dataset):
             waveform = waveform.mean(0)
             
         if samplerate != self.samplerate:
+            print("resampling")
             try:
                 waveform = torchaudio.functional.resample(waveform,orig_freq=samplerate,new_freq=self.samplerate)
             except:
                 print("Could not resample!")
                 print(path)
         if self.normalize:
-            waveform /= waveform.abs().max()
+            mabs = waveform.abs().max()
+            if mabs > 1e-3:
+                waveform /= mabs
         if self.augment_levels:
             waveform *= db2mag(torch.rand(1)*self.dbmin-self.dbmin)
             
@@ -109,10 +113,12 @@ class Audioset(Dataset):
         while flag is True:
             waveform = self._load_audio(k)
             N = len(waveform)
-            starting = np.random.randint(self.starting_samples)
-            N -= starting
             if (N+L) >= self.samples:
                 N = self.samples - L
+            starting = np.random.randint(self.starting_samples)
+            if starting + N > len(waveform):
+                starting = len(waveform) - N
+
             output[L:L+N] = waveform[starting:starting+N]
             L += N
             S = np.random.randint(self.silence_samples)
@@ -362,15 +368,16 @@ class Mixer(torch.nn.Module):
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
-    dataset = Audioset(root='/home/jneri/projects/def-depalle/jneri/data/VCTK',duration=4,path_csv='test.csv',silence=.5,starting=1,max_files=4,augment_levels=True)
-    dataloader = torch.utils.data.DataLoader(dataset,batch_size=16,shuffle=True)
-    pipeline = AudioPipeline(n_fft=512,n_time=513,hop_length=128,compression=.5)
+    dataset = Audioset(root='/home/jneri/projects/def-depalle/jneri/data',duration=8,path_csv='composite/test.csv',silence=.5,starting=0,max_files=10,augment_levels=True)
+    dataloader = torch.utils.data.DataLoader(dataset,batch_size=64,shuffle=True)
+    pipeline = AudioPipeline(n_fft=512,n_time=1025,hop_length=128,compression=.5)
     mixer = Mixer(n_sources=2)
     #%%
     x,_ = next(iter(dataloader))
-    
-    
+
     data,sources = mixer(x)
+
+    print(data.abs().max())
     X = pipeline(data)
     S = pipeline(sources)
     
