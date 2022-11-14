@@ -18,10 +18,10 @@ from utils.utils import optimal_permute
 from collections import OrderedDict
 import seaborn as sns
 from utils.utils import torchToNumpy, mag2db
+import glob
+import re
 
 #* Make a class / module to process the bss eval measures.
-
-#* Save the measures per source, sorted (1st best, 2nd best)
 
 def load_state_dict(path):
     # original saved file with DataParallel
@@ -30,7 +30,9 @@ def load_state_dict(path):
     
     new_state_dict = OrderedDict()
     for k, v in state_dict.items():
-        name = k[7:] # remove `module.`
+        name = k
+        if 'module.' == name[:7]:
+            name = name[7:] # remove `module.`
         new_state_dict[name] = v
     
     return new_state_dict
@@ -113,7 +115,21 @@ output_path = os.path.join(args.output_directory,args.job_id)
 output_audio_path = os.path.join(output_path,"audio")
 os.makedirs(output_path,exist_ok=True)
 os.makedirs(output_audio_path,exist_ok=True)
-averaged = False
+
+# Check the parameters of the model saved in that directory.
+model_path = os.path.join(args.model_directory,args.job_id)
+
+os.chdir(model_path)
+model_name = glob.glob("*.pt")[0]
+match = re.match(r'svae_([^_]+)_K(\d+)_L1_pooled_D(\d+)_C(\d+)-10.pt', model_name)
+
+args.num_sources = int(match.group(2))
+args.latent_dim = int(match.group(3))
+args.compression = float(match.group(4)) * .1
+
+print(args.num_sources)
+print(args.latent_dim)
+print(args.compression)
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -121,6 +137,7 @@ device = torch.device("cuda" if args.cuda else "cpu")
 kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if args.cuda else {}
 
 nfft = 512
+averaged = False
 dim_data = (nfft//2+1,args.duration)
 
 data_root = args.data_directory + '/RWC_dataset'
@@ -129,8 +146,11 @@ path_csv = 'test.csv'
 if args.dataset == 'composite':
     data_root = args.data_directory
     path_csv = 'composite/test.csv'
+if args.dataset == 'MUMS':
+    data_root = args.data_directory + "/MUMS"
+    path_csv = None
 
-test_set = Audioset(root=data_root,path_csv=path_csv,augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,max_files=args.max_files)
+test_set = Audioset(root=data_root,path_csv=path_csv,augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=0,max_files=args.max_files)
 test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=True)
 
 mixer = Mixer(n_sources=2,average=averaged)
@@ -161,7 +181,7 @@ model = DCAE(
         kernel_size=kernel_size,stride=stride,padding=padding,
         )
 
-model.load_state_dict(load_state_dict(path=os.path.join(args.model_directory,args.job_id) + "/svae_RWC_K{}_L1_pooled_D{}_C5-10.pt".format(args.num_sources,args.latent_dim)))
+model.load_state_dict(load_state_dict(path=os.path.join(args.model_directory,args.job_id) + "/" + model_name))
 model.to(device)
 model.eval()
 
@@ -233,7 +253,7 @@ mycmp = ListedColormap(newcolors)
 #%%
 kwds = dict(cmap=mycmp,origin='lower',aspect='auto',interpolation='none',vmax=15)
 pipeline.compression = 1.0
-for n in range(8):
+for n in range(4):
     output_audio_path_n = output_audio_path + "/ex_{}".format(n+1)
     os.makedirs(output_audio_path_n,exist_ok=True)
 

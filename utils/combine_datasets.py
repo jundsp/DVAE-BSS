@@ -7,7 +7,7 @@ import pandas as pd
 import torchaudio
 
 
-dataset = ['RWC','VCTK']
+dataset = ['RWC_dataset','VCTK','MUMS']
 idxs = {'train': [], 'validate': [],'test': []}
 
 data_path = Path('/home/jneri/projects/def-depalle/jneri/data')

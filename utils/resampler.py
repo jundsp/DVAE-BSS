@@ -27,12 +27,12 @@ def walk_files(root, suffix, prefix=False, remove_suffix=False):
 
 
 parser = argparse.ArgumentParser(description='DSAE Example')
-parser.add_argument('--data-path', type=str, default='/home/jneri/projects/def-depalle/jneri/data/RWC_dataset', metavar='N',
+parser.add_argument('--data-path', type=str, default='/home/jneri/projects/def-depalle/jneri/data/MUMS', metavar='N',
                     help='input batch size for training (default: 512)')
 args = parser.parse_args()
 
 data_path = Path(args.data_path)
-audio_path = 'audio'
+audio_path = 'DVDs'
 input_path = data_path.joinpath(audio_path)
 output_path =data_path.joinpath("wav16")
 os.makedirs(output_path,exist_ok=True)

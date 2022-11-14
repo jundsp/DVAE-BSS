@@ -71,7 +71,7 @@ class Audioset(Dataset):
             self._walker = list(walker)
         else:
             print(os.path.join(root,path_csv))
-            self._walker = pd.read_csv(os.path.join(root,path_csv),header=None)[0].tolist()
+            self._walker = pd.read_csv(os.path.join(root,path_csv),header=None,sep='\t')[0].tolist()
            
 
         self.n_files = len(self._walker)
