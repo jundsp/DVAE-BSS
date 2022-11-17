@@ -54,3 +54,5 @@ parser.add_argument('--world_size', default=1, type=int, help='')
 parser.add_argument('--distributed', action='store_true', help='')
 parser.add_argument('--max-files', type=int, default=100, metavar='fname',
                     help='max number of sounds to concatenate into single stream')
+parser.add_argument('--num-targets', type=int, default=2, metavar='fname',
+                    help='number of targets in the mixture concurrently (default 2)')

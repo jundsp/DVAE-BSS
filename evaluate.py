@@ -1,18 +1,12 @@
 #%%
 import torch
-from torch import nn, optim
-from torch.nn import functional as F
-import math
 import torchaudio
 import os
 from matplotlib import cm
-from matplotlib.colors import ListedColormap, LinearSegmentedColormap
+from matplotlib.colors import ListedColormap
 import matplotlib.pyplot as plt
-import argparse
-from torchvision import datasets, transforms
 from model import *
 from dataset import *
-from torchvision.utils import make_grid, save_image
 from argparser import parser
 from utils.utils import optimal_permute
 from collections import OrderedDict
@@ -153,7 +147,9 @@ if args.dataset == 'MUMS':
 test_set = Audioset(root=data_root,path_csv=path_csv,augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=0,max_files=args.max_files)
 test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=True)
 
-mixer = Mixer(n_sources=2,average=averaged)
+print("evaluating {} examples.".format(len(test_set)))
+
+mixer = Mixer(n_sources=args.num_targets,average=averaged)
 pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
 mixer = mixer.to(device)
 pipeline = pipeline.to(device)
@@ -253,14 +249,17 @@ mycmp = ListedColormap(newcolors)
 #%%
 kwds = dict(cmap=mycmp,origin='lower',aspect='auto',interpolation='none',vmax=15)
 pipeline.compression = 1.0
-for n in range(4):
-    output_audio_path_n = output_audio_path + "/ex_{}".format(n+1)
+np.random.seed(1)
+print(mix.shape)
+idx = np.random.permutation(mix.shape[0])[:8]
+for ii,n in enumerate(idx):
+    output_audio_path_n = output_audio_path + "/ex_{}".format(ii+1)
     os.makedirs(output_audio_path_n,exist_ok=True)
 
     fig,ax = plt.subplots(args.num_sources,3,figsize=(9,3*args.num_sources))
     ax[0,0].imshow(mag2db(pipeline(mix[n])+1e-9).cpu(),**kwds)
-    ax[0,1].imshow(mag2db(pipeline(sources[n,0])+1e-9).cpu(),**kwds)
-    ax[1,1].imshow(mag2db(pipeline(sources[n,1])+1e-9).cpu(),**kwds)
+    for i in range(args.num_targets):
+        ax[i,1].imshow(mag2db(pipeline(sources[n,i])+1e-9).cpu(),**kwds)
     for i in range(args.num_sources):
         ax[i,2].imshow(mag2db(pipeline(estimates[n,i])+1e-9).cpu(),**kwds)
 
@@ -270,7 +269,7 @@ for n in range(4):
 
     for i in range(1,args.num_sources):
         ax[i,0].remove()
-    for i in range(2,args.num_sources):
+    for i in range(args.num_targets,args.num_sources):
         ax[i,1].remove()
 
 
@@ -283,3 +282,13 @@ for n in range(4):
         torchaudio.save(output_audio_path_n + "/source_{}.wav".format(i+1),sources[n,i].unsqueeze(0).cpu() / 2,16000)
     for i in range(estimates.shape[1]):
         torchaudio.save(output_audio_path_n + "/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0).cpu() / 2,16000)
+
+    mix_down = torch.zeros((2,mix[n].shape[0]))
+    nsrc = estimates.shape[1]
+    for i in range(nsrc):
+        panr = i/(nsrc-1.0)
+        panl = 1-panr
+        pan = torch.tensor([panl,panr])
+        mix_down += estimates[n,i].view(1,-1).cpu() * pan.view(-1,1)
+
+    torchaudio.save(output_audio_path_n + "/mixdown_estimates.wav",mix_down.cpu() / 2,16000)
