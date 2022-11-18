@@ -64,8 +64,6 @@ def synthesize(magnitude,phase,istft):
 
 
 #%%
-
-#%%
 args = parser.parse_args(args=[])
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
@@ -74,6 +72,7 @@ np.random.seed(args.seed)
 
 os.chdir(args.model_directory)
 model_name = glob.glob("*.pt")[0]
+print(model_name)
 match = re.match(r'svae_([^_]+)_K(\d+)_L1_pooled_D(\d+)_C(\d+)-10.pt', model_name)
 
 args.num_sources = int(match.group(2))
@@ -96,10 +95,16 @@ averaged = False
 dim_data = (nfft//2+1,args.duration)
 
 mixer = Mixer(n_sources=2,average=averaged)
-args.n_time = 257
+args.n_time = 513
 pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
 mixer = mixer.to(device)
 pipeline = pipeline.to(device)
+
+#%%
+input_file = "/Users/julian/Documents/MATLAB/sounds/trombone_violin.wav"
+data,sr = torchaudio.load(input_file)
+
+data = torchaudio.functional.resample(data,orig_freq=sr,new_freq=16000.0,resampling_method='kaiser_window')
 
 #%% LOAD MODEL
 
@@ -128,9 +133,6 @@ model.load_state_dict(load_state_dict(path=args.model_directory + "/" + model_na
 model.to(device)
 model.eval()
 pipeline.compression = args.compression
-
-input_file = "/Users/julian/Documents/MATLAB/sounds/OriginalMix.wav"
-data,sr = torchaudio.load(input_file)
 
 with torch.no_grad():
     mix, sources = mixer(waveform=data.to(device))
@@ -171,8 +173,18 @@ for i in range(2,args.num_sources):
     ax[1,i].remove()
 # %%
 
-torchaudio.save(args.model_directory+ "/mix.wav",mix[n].unsqueeze(0).cpu() / 2,sr)
+torchaudio.save(args.output_directory + "/mix.wav",mix[n].unsqueeze(0).cpu() / 2,16000)
 for i in range(estimates.shape[1]):
-    torchaudio.save(args.model_directory + "/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0).cpu() / 2,sr)
+    torchaudio.save(args.output_directory + "/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0).cpu() / 2,16000)
     
+# %%
+mix_down = torch.zeros((2,mix[n].shape[0]))
+nsrc = estimates.shape[1]
+for i in range(nsrc):
+    panr = i/(nsrc-1.0)
+    panl = 1-panr
+    pan = torch.tensor([panl,panr])
+    mix_down += estimates[n,i].view(1,-1).cpu() * pan.view(-1,1)
+
+torchaudio.save(args.output_directory + "/mixdown_estimates.wav",mix_down.cpu() / 2,16000)
 # %%
