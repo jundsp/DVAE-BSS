@@ -18,4 +18,5 @@ soundfile
 pathlib
 pandas
 seaborn
+librosa
 # samplerate

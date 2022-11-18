@@ -171,8 +171,8 @@ for i in range(1,args.num_sources):
     ax[0,i].remove()
 for i in range(2,args.num_sources):
     ax[1,i].remove()
-# %%
 
+# %%
 torchaudio.save(args.output_directory + "/mix.wav",mix[n].unsqueeze(0).cpu() / 2,16000)
 for i in range(estimates.shape[1]):
     torchaudio.save(args.output_directory + "/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0).cpu() / 2,16000)

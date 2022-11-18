@@ -217,25 +217,33 @@ if __name__ == "__main__":
         dim_data = (nfft//2+1,args.duration)
         train_set = Audioset(root=args.data_directory + '/RWC_dataset',path_csv='train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
         test_set =  Audioset(root=args.data_directory + '/RWC_dataset',path_csv='validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
-        mixer = Mixer(n_sources=2)
-        pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
 
     if args.dataset == 'VCTK':
         nfft = 512
         dim_data = (nfft//2+1,args.duration)
         train_set = Audioset(root=args.data_directory + '/VCTK',path_csv='train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.1,starting=.5)
         test_set =  Audioset(root=args.data_directory + '/VCTK',path_csv='validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.1,starting=.5)
-        mixer = Mixer(n_sources=2)
-        pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
 
     if args.dataset == 'composite':
         nfft = 512
         dim_data = (nfft//2+1,args.duration)
         train_set = Audioset(root=args.data_directory,path_csv='composite/train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=.5)
         test_set =  Audioset(root=args.data_directory,path_csv='composite/validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=.5)
-        mixer = Mixer(n_sources=2)
-        pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
-    
+
+    if args.dataset == 'nsynth':
+        nfft = 512
+        dim_data = (nfft//2+1,args.duration)
+        kwds_dset = dict(augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=.1,remove_silence=args.remove_silence)
+        train_set = Audioset(root=args.data_directory + '/nsynth-train',path_csv=None,**kwds_dset)
+        test_set =  Audioset(root=args.data_directory + '/nsynth-valid',path_csv=None,**kwds_dset)
+
+    mixer = Mixer(n_sources=args.num_targets,average=args.average_mix)
+    pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
+    mixer = mixer.to(device)
+    pipeline = pipeline.to(device)
+
+    print("Trainset -> found {} files.".format(len(train_set)))
+    print("Testset -> found {} files.".format(len(test_set)))
     print('From Rank: {}, ==> Preparing data..'.format(rank))
     
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_set)
@@ -244,12 +252,6 @@ if __name__ == "__main__":
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=(train_sampler is None), num_workers=args.num_workers, sampler=train_sampler)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=(test_sampler is None), num_workers=args.num_workers, sampler=test_sampler)
     
-    mixer = mixer.to(device)
-    pipeline = pipeline.to(device)
-    
-    print("Trainset -> found {} files.".format(len(train_set)))
-    print("Testset -> found {} files.".format(len(test_set)))
-
     root = args.output_directory
     
     current_time = datetime.now().strftime('%y%m%d')
@@ -296,7 +298,7 @@ if __name__ == "__main__":
             net_type=args.net_type,
             num_layers=args.num_layers,
             scale_invariant=True,
-            layer_channels=(32,64,128,128),
+            layer_channels=tuple(args.cnn_channels),
             kernel_size=kernel_size,stride=stride,padding=padding,
             )
     else:
@@ -309,7 +311,7 @@ if __name__ == "__main__":
         net_type='pooled',
         num_layers=args.num_layers,
         scale_invariant=True,
-        layer_channels=(32,64,128,128),
+        layer_channels=tuple(args.cnn_channels),
         )
         
     model.to(device)

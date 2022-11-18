@@ -13,6 +13,7 @@ import random
 import pandas as pd
 from utils.utils import mag2db, db2mag
 import torch.nn.functional as F
+import librosa
 
 def round_pow2(x):
     return int(np.power(2,np.ceil(np.log2(x))))
@@ -53,7 +54,7 @@ def walk_files(root, suffix, prefix=False, remove_suffix=False):
                 yield fname
 
 class Audioset(Dataset):
-    def __init__(self,root,path_csv=None,duration=4,normalize=True,suffix='.wav',samplerate=16000,augment_levels=False,silence=.1,max_files=20,starting=0):
+    def __init__(self,root,path_csv=None,duration=4,normalize=True,suffix='.wav',samplerate=16000,augment_levels=False,silence=.1,max_files=20,starting=0,remove_silence=False):
         self._path = root
         self.duration = duration
         self.normalize = normalize
@@ -64,7 +65,6 @@ class Audioset(Dataset):
 
         starting = np.maximum(0.0,float(starting))
         silence = np.maximum(0.0, float(silence))
-        
 
         if path_csv is None:
             walker = walk_files(self._path, suffix=suffix, prefix=True)
@@ -80,6 +80,7 @@ class Audioset(Dataset):
         self.starting_samples = int(starting*samplerate) + 1
         self.dbmin = 30
         self.max_files = max_files
+        self.remove_silence = remove_silence
         
     def _load_audio(self,n):
         path = self._walker[n]
@@ -99,9 +100,15 @@ class Audioset(Dataset):
             mabs = waveform.abs().max()
             if mabs > 1e-3:
                 waveform /= mabs
+
+        if self.remove_silence:
+            waveform = librosa.effects.trim(waveform.numpy(),top_db=70)[0]
+            waveform = torch.from_numpy(waveform)
+
+
         if self.augment_levels:
             waveform *= db2mag(torch.rand(1)*self.dbmin-self.dbmin)
-            
+
         return waveform
                 
     def __getitem__(self, n):
@@ -368,10 +375,10 @@ class Mixer(torch.nn.Module):
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
-    dataset = Audioset(root='/home/jneri/projects/def-depalle/jneri/data',duration=8,path_csv='composite/test.csv',silence=.5,starting=0,max_files=10,augment_levels=True)
+    dataset = Audioset(root='/home/jneri/projects/def-depalle/jneri/data/nsynth/',duration=8,path_csv=None,silence=.1,starting=.1,max_files=10,augment_levels=True)
     dataloader = torch.utils.data.DataLoader(dataset,batch_size=64,shuffle=True)
     pipeline = AudioPipeline(n_fft=512,n_time=1025,hop_length=128,compression=.5)
-    mixer = Mixer(n_sources=2)
+    mixer = Mixer(n_sources=2,average=True)
     #%%
     x,_ = next(iter(dataloader))
 

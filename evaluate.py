@@ -173,7 +173,7 @@ model = DCAE(
         net_type=args.net_type,
         num_layers=args.num_layers,
         scale_invariant=True,
-        layer_channels=(32,64,128,128),
+        layer_channels=tuple(args.cnn_channels),
         kernel_size=kernel_size,stride=stride,padding=padding,
         )
 
@@ -271,7 +271,6 @@ for ii,n in enumerate(idx):
         ax[i,0].remove()
     for i in range(args.num_targets,args.num_sources):
         ax[i,1].remove()
-
 
     plt.savefig(output_audio_path_n + "/evaluation_spec.png")
     plt.tight_layout()

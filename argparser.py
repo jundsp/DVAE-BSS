@@ -17,6 +17,8 @@ parser.add_argument('--mix-data', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--conv2d', action='store_true', default=False)
 parser.add_argument('--augment-levels', action='store_true', default=False)
+parser.add_argument('--average-mix', action='store_true', default=False)
+parser.add_argument('--remove-silence', action='store_true', default=False)
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--dataset', type=str, default='MNIST', metavar='fname',
@@ -56,3 +58,4 @@ parser.add_argument('--max-files', type=int, default=100, metavar='fname',
                     help='max number of sounds to concatenate into single stream')
 parser.add_argument('--num-targets', type=int, default=2, metavar='fname',
                     help='number of targets in the mixture concurrently (default 2)')
+parser.add_argument('--cnn-channels',type=int,nargs='+',default=[32,64,128,128])
