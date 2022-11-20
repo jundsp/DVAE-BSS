@@ -233,7 +233,7 @@ if __name__ == "__main__":
     if args.dataset == 'nsynth':
         nfft = 512
         dim_data = (nfft//2+1,args.duration)
-        kwds_dset = dict(augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=.1,remove_silence=args.remove_silence)
+        kwds_dset = dict(augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=0,remove_silence=args.remove_silence)
         train_set = Audioset(root=args.data_directory + '/nsynth-train',path_csv=None,**kwds_dset)
         test_set =  Audioset(root=args.data_directory + '/nsynth-valid',path_csv=None,**kwds_dset)
 

@@ -105,7 +105,6 @@ class Audioset(Dataset):
             waveform = librosa.effects.trim(waveform.numpy(),top_db=70)[0]
             waveform = torch.from_numpy(waveform)
 
-
         if self.augment_levels:
             waveform *= db2mag(torch.rand(1)*self.dbmin-self.dbmin)
 

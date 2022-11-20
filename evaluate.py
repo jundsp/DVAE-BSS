@@ -143,6 +143,9 @@ if args.dataset == 'composite':
 if args.dataset == 'MUMS':
     data_root = args.data_directory + "/MUMS"
     path_csv = None
+if args.dataset == 'nsynth':
+    data_root = args.data_directory + "/nsynth-test/audio"
+    path_csv = None
 
 test_set = Audioset(root=data_root,path_csv=path_csv,augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=0,max_files=args.max_files)
 test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=True)
@@ -250,7 +253,6 @@ mycmp = ListedColormap(newcolors)
 kwds = dict(cmap=mycmp,origin='lower',aspect='auto',interpolation='none',vmax=15)
 pipeline.compression = 1.0
 np.random.seed(1)
-print(mix.shape)
 idx = np.random.permutation(mix.shape[0])[:8]
 for ii,n in enumerate(idx):
     output_audio_path_n = output_audio_path + "/ex_{}".format(ii+1)
@@ -284,8 +286,19 @@ for ii,n in enumerate(idx):
 
     mix_down = torch.zeros((2,mix[n].shape[0]))
     nsrc = estimates.shape[1]
+    pans = np.linspace(-1,1,nsrc)
+    e = pans[:nsrc//2]
+    o = pans[nsrc//2:][::-1]
+    pans[::2] = e
+    pans[1::2] = o
+    pans += 1.0
+    pans /= 2.0
+
+    print(pans)
+
     for i in range(nsrc):
         panr = i/(nsrc-1.0)
+        panr = pans[i]
         panl = 1-panr
         pan = torch.tensor([panl,panr])
         mix_down += estimates[n,i].view(1,-1).cpu() * pan.view(-1,1)
