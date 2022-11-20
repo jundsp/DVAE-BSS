@@ -11,7 +11,7 @@ from argparser import parser
 from utils.utils import optimal_permute
 from collections import OrderedDict
 import seaborn as sns
-from utils.utils import torchToNumpy, mag2db
+from utils.utils import torchToNumpy, mag2db, panning
 import glob
 import re
 
@@ -286,15 +286,10 @@ for ii,n in enumerate(idx):
 
     mix_down = torch.zeros((2,mix[n].shape[0]))
     nsrc = estimates.shape[1]
-    pans = np.linspace(-1,1,nsrc)
-    e = pans[:nsrc//2]
-    o = pans[nsrc//2:][::-1]
-    pans[::2] = e
-    pans[1::2] = o
-    pans += 1.0
-    pans /= 2.0
+    pans  = panning(nsrc)
 
     print(pans)
+
 
     for i in range(nsrc):
         panr = i/(nsrc-1.0)

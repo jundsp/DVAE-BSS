@@ -35,3 +35,20 @@ def optimal_permute(y,x):
             out[i,nx:] = y[i,k_rem]
 
     return out
+
+
+def panning(nsrc):
+    pspace = np.linspace(-1,1,nsrc)
+    no = nsrc//2
+    ne = nsrc - no
+    e = pspace[:ne]
+    o = pspace[ne:][::-1]
+
+    pans = np.zeros(nsrc)
+    pans[::2] = e
+    pans[1::2] = o
+    pans += 1.0
+    pans /= 2.0
+    return pans
+
+# %%
