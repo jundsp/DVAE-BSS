@@ -39,10 +39,8 @@ parser.add_argument('--n-time', type=int, default=513, metavar='N',
                     help='Time frames')
 parser.add_argument('--data-directory', type=str, default='/Users/julian/Documents/Code/data', metavar='fname',
                     help='Folder containing the spectrogram data')
-parser.add_argument('--output-directory', type=str, default='/Users/julian/Desktop', metavar='fname',
-                    help='Folder to save output data')
-parser.add_argument('--model-directory', type=str, default='/Users/julian/Desktop', metavar='fname',
-                    help='Folder that has models.')
+parser.add_argument('--output-directory', type=str, default='/Users/julian/Desktop', metavar='fname', help='Folder to save output data')
+parser.add_argument('--model-directory', type=str, default='/Users/julian/Desktop', metavar='fname',help='Folder that has models.')
 parser.add_argument('--net-type', type=str, default='pooled', metavar='fname',
                     help='name of the dataset')
 parser.add_argument('--num-layers', type=int, default=1, metavar='fname',
@@ -59,3 +57,5 @@ parser.add_argument('--max-files', type=int, default=100, metavar='fname',
 parser.add_argument('--num-targets', type=int, default=2, metavar='fname',
                     help='number of targets in the mixture concurrently (default 2)')
 parser.add_argument('--cnn-channels',type=int,nargs='+',default=[32,64,128,128])
+parser.add_argument('--net-type', type=str, default='svae', metavar='netname',
+                    help='Network type, svae or vae')

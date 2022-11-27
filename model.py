@@ -277,6 +277,107 @@ class DCAE(DSAE):
         y = self.Decoder(z)
         return y
 
+
+
+class LinearBlock(nn.Module):
+    def __init__(self, in_channels,out_channels,activation=True):
+        super(LinearBlock, self).__init__()
+        if activation is True:
+            self.block = nn.Sequential(
+                nn.Linear(in_channels, out_channels),
+                nn.BatchNorm1d(out_channels),
+                nn.ReLU(inplace=True),
+                )
+        else:
+            self.block = nn.Sequential(
+                nn.Linear(in_channels, out_channels),
+                )
+
+    def forward(self, x):
+        return self.block(x)
+
+class VAE(nn.Module):
+    def __init__(self, dimx, dimz, n_sources=1,variational=True):
+        super(VAE, self).__init__()
+
+        self.dimx = dimx
+        self.dimz = dimz
+        self.n_sources = n_sources
+        self.variational = variational
+
+        chans = (2560, 2048, 1536, 1024, 512)
+
+        self.out_z = nn.Linear(chans[-1],2*self.n_sources*self.dimz)
+        self.out_w = nn.Linear(chans[-1],self.n_sources)
+
+        self.Encoder = nn.Sequential(
+            LinearBlock(self.dimx, chans[0]),
+            LinearBlock(chans[0],chans[1]),
+            LinearBlock(chans[1],chans[2]),
+            LinearBlock(chans[2],chans[3]),
+            LinearBlock(chans[3],chans[4]),
+            )
+
+        self.Decoder = nn.Sequential(
+            LinearBlock(self.dimz, chans[4]),
+            LinearBlock(chans[4],chans[3]),
+            LinearBlock(chans[3],chans[2]),
+            LinearBlock(chans[2],chans[1]),
+            LinearBlock(chans[1],chans[0]),
+            LinearBlock(chans[0],self.dimx,activation=False),
+            )
+
+        self.register_parameter('variance',nn.Parameter(torch.ones(1)*.1,requires_grad=False))
+        self.register_parameter('smu',nn.Parameter(torch.zeros(1,n_sources,self.dimz)))
+        self.register_parameter('smu0',nn.Parameter(torch.zeros(1,n_sources,self.dimz)))
+        self.register_buffer('slogvar',torch.zeros(1,n_sources,self.dimz))
+        self.register_buffer('slogvar0',torch.zeros(1,n_sources,self.dimz))
+
+    def get_variance(self):
+        return self.variance*1.0
+
+    def encode(self, x):
+        d = self.Encoder(x)
+        dz = self.out_z(d)
+        mu = dz[:,::2]
+        logvar = dz[:,1::2]
+        return mu,logvar
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5*logvar)
+        eps = torch.randn_like(std)
+        return mu + eps*std
+
+    def decode(self, z):
+        d = self.Decoder(z.view(-1,self.dimz))
+        recon_separate = torch.sigmoid(d).view(-1,self.n_sources,self.dimx)
+        recon_x = recon_separate.sum(1) 
+        return recon_x, recon_separate
+
+    def forward(self, x):
+        xshape = x.shape
+        mu, logvar = self.encode(x.view(-1, self.dimx))
+        if self.variational is True:
+            z = self.reparameterize(mu, logvar)
+            recon_x, recons = self.decode(z)
+        else:
+            recon_x, recons = self.decode(mu)
+
+        out = {
+            'recon_x': recon_x.view(-1,xshape[-2],xshape[-1]), 
+            'recon_s': recons.view(-1,recons.shape[1],xshape[-2],xshape[-1]), 
+            'mu_q': mu, 
+            'logvar_q': logvar,
+            'mu_p': torch.zeros_like(mu), 
+            'logvar_p': torch.zeros_like(logvar), 
+            'mu0_q': torch.zeros(1,device=mu.device), 
+            'logvar0_q': torch.zeros(1,device=mu.device), 
+            'smu0': torch.zeros(1,device=mu.device), 
+            'slogvar0':  torch.zeros(1,device=mu.device), 
+            'variance': self.get_variance(),
+            }
+        return out
+
 '''
 Encoder/Decoders for Features.
 1) Strided
@@ -447,7 +548,7 @@ class NormalLikelihood(nn.Module):
         if var is None:
             var = self.variance
 
-        alpha = torch.ones_like(mean)[:,0,0].view(-1,1,1)
+        alpha = torch.ones(mean.shape[0],device=mean.device).view(-1,1,1)
         mu = mean.clone().detach()
 
         if self.scale_invariant:
@@ -479,10 +580,8 @@ class LossFunction(nn.Module):
             
         # Si-SDR? scale the target... but it is the mixture.
         ell = self.likelihood(x, mu_x, var=variance) 
-        kld = KLD(mu,logvar,prior_mean=mu_prior,prior_logvar=logvar_prior) 
-        prior_mean = smu0
-        prior_logvar = slogvar0
-        kld += KLD(mu0,logvar0,prior_mean=prior_mean,prior_logvar=prior_logvar)
+        kld = KLD(mu,logvar,prior_mean=mu_prior,prior_logvar=logvar_prior)
+        kld += KLD(mu0,logvar0,prior_mean=smu0,prior_logvar=slogvar0)
         
         return ell / N , kld / N
     
@@ -508,12 +607,16 @@ if __name__ == "__main__":
     dec = StridedDecoder(input_channels=32,output_channels=1)
     
     dimx = 257
-    x = torch.randn(4,1,dimx,129)
-    z = enc(x)
-    y = dec(z)
+    dimt = 129
+    x = torch.randn(4,dimx,dimt)
 
     model = DCAE(dimx=dimx,dimz=32,kernel_size=(3,2),stride=(2,1),padding=(1,0),layer_channels=(32,64,64,64,64))
+
+    model = VAE(dimx=dimx*dimt,dimz=64,n_sources=2)
     output = model(x)
+
+    lossfun = LossFunction()
+    lossfun.forward(x=x,output=output)
     
     x_hat = output['recon_x']
 

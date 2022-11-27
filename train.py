@@ -265,7 +265,8 @@ if __name__ == "__main__":
     os.makedirs(path_saves,exist_ok=True)
     os.makedirs(path_runs,exist_ok=True)
 
-    writer = SummaryWriter(log_dir=path_runs,comment='svae_' + str(args.dataset))
+    net_type = str(args.net_type)
+    writer = SummaryWriter(log_dir=path_runs,comment=net_type + '_' + str(args.dataset))
 
     dimx = dim_data[0]
     dimz = args.latent_dim
@@ -275,44 +276,50 @@ if __name__ == "__main__":
     
     print('From Rank: {}, ==> Making model..'.format(rank))
 
-    model_name = ('{}/svae_{}_K{}_L{}_{}_D{}_C{}-{}.pt').format(
+    model_name = ('{}/{}_{}_K{}_L{}_{}_D{}_C{}-{}.pt').format(
         path_saves,
+        net_type,
         args.dataset,
         str(args.num_sources),
         str(args.num_layers),
         args.net_type,
         args.latent_dim,
-        int(args.compression*10),int(10))
-    
-    if args.conv2d:
-        kernel_size=(3,3)
-        stride=(2,2)
-        padding=(1,1)
-        
-        model = DCAE(
+        int(args.compression*10),
+        int(10)
+        )
+
+    if net_type == 'vae':
+        model = VAE(dimx=dim_data[0]*dim_data[1],dimz=args.latent_dim,n_sources=args.num_sources)
+    else:
+        if args.conv2d:
+            kernel_size=(3,3)
+            stride=(2,2)
+            padding=(1,1)
+            
+            model = DCAE(
+                dimx=dimx,
+                dimz=dimz,
+                dimh=dimh,
+                dimg=dimg,
+                num_sources=args.num_sources,
+                net_type=args.net_type,
+                num_layers=args.num_layers,
+                scale_invariant=True,
+                layer_channels=tuple(args.cnn_channels),
+                kernel_size=kernel_size,stride=stride,padding=padding,
+                )
+        else:
+            model = DSAE(
             dimx=dimx,
             dimz=dimz,
             dimh=dimh,
             dimg=dimg,
             num_sources=args.num_sources,
-            net_type=args.net_type,
+            net_type='pooled',
             num_layers=args.num_layers,
             scale_invariant=True,
             layer_channels=tuple(args.cnn_channels),
-            kernel_size=kernel_size,stride=stride,padding=padding,
             )
-    else:
-        model = DSAE(
-        dimx=dimx,
-        dimz=dimz,
-        dimh=dimh,
-        dimg=dimg,
-        num_sources=args.num_sources,
-        net_type='pooled',
-        num_layers=args.num_layers,
-        scale_invariant=True,
-        layer_channels=tuple(args.cnn_channels),
-        )
         
     model.to(device)
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[current_device])
