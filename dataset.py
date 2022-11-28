@@ -26,6 +26,37 @@ def get_data_loaders(directory,batch_size,kwargs):
     test_loader = torch.utils.data.DataLoader(test_set,batch_size=batch_size, shuffle=True, **kwargs)
 
     return train_loader, test_loader
+
+
+def get_datasets(dataset,path,args):
+    if dataset == 'MNIST':
+        dim_data = (33,32)
+        transform = transforms.Compose([transforms.CenterCrop(size=dim_data),transforms.RandomAffine(degrees=0,translate=(0.05,0.2)),transforms.ToTensor()])
+        train_set = datasets.MNIST(path, train=True, transform=transform, download=True)
+        test_set = datasets.MNIST(path, train=False, transform=transform, download=True)
+
+    if dataset == 'MUMS':
+        train_set = Audioset(path + '/MUMS', path_csv='train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
+        test_set = Audioset(path + '/MUMS', path_csv='test.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
+                
+    if dataset == 'RWC':
+        train_set = Audioset(root=path + '/RWC_dataset',path_csv='train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
+        test_set =  Audioset(root=path + '/RWC_dataset',path_csv='validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
+
+    if dataset == 'VCTK':
+        train_set = Audioset(root=path + '/VCTK',path_csv='train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.1,starting=.5)
+        test_set =  Audioset(root=path + '/VCTK',path_csv='validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.1,starting=.5)
+
+    if dataset == 'composite':
+        train_set = Audioset(root=path,path_csv='composite/train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=.5)
+        test_set =  Audioset(root=path,path_csv='composite/validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=.5)
+
+    if dataset == 'nsynth':
+        kwds_dset = dict(augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=0,remove_silence=args.remove_silence)
+        train_set = Audioset(root=path + '/nsynth-train',path_csv=None,**kwds_dset)
+        test_set =  Audioset(root=path + '/nsynth-valid',path_csv=None,**kwds_dset)
+
+    return train_set, test_set
     
 class STFT(nn.Module):
     def __init__(self, n_fft, hop_length = None):

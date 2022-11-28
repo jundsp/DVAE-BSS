@@ -48,8 +48,9 @@ def compute_measures_batch(estimates, targets, salt=1e-14):
     SAR = torch.zeros(n,k,device=estimates.device)
 
     Rss = torch.zeros(n,k,k,device=estimates.device)
+    I = torch.eye(k,device=estimates.device)*1e-12
     for ii in range(n):
-        Rss[ii] = targets[ii] @ targets[ii].T
+        Rss[ii] = targets[ii] @ targets[ii].T + I
     
     for jj in range(k):
         SDR[:,jj], SIR[:,jj], SAR[:,jj] = compute_measures_batch_one(estimates=estimates[:,jj],targets=targets,Rss=Rss,j=jj,salt=salt)
@@ -115,7 +116,7 @@ model_path = os.path.join(args.model_directory,args.job_id)
 
 os.chdir(model_path)
 model_name = glob.glob("*.pt")[0]
-match = re.match(r'svae_([^_]+)_K(\d+)_L1_pooled_D(\d+)_C(\d+)-10.pt', model_name)
+match = re.match(args.model_type+r'_([^_]+)_K(\d+)_L1_pooled_D(\d+)_C(\d+)-10.pt', model_name)
 
 args.num_sources = int(match.group(2))
 args.latent_dim = int(match.group(3))
@@ -132,7 +133,7 @@ kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if args.cuda else
 
 nfft = 512
 averaged = False
-dim_data = (nfft//2+1,args.duration)
+dim_data = (nfft//2+1,int(args.n_time))
 
 data_root = args.data_directory + '/RWC_dataset'
 path_csv = 'test.csv'
@@ -167,18 +168,22 @@ kernel_size=(3,3)
 stride=(2,2)
 padding=(1,1)
 
-model = DCAE(
-        dimx=dimx,
-        dimz=dimz,
-        dimh=dimh,
-        dimg=dimg,
-        num_sources=args.num_sources,
-        net_type=args.net_type,
-        num_layers=args.num_layers,
-        scale_invariant=True,
-        layer_channels=tuple(args.cnn_channels),
-        kernel_size=kernel_size,stride=stride,padding=padding,
-        )
+if args.model_type == 'vae':
+    dimx = int(dim_data[0]*dim_data[1])
+    model = VAE(dimx=dimx,dimz=int(args.latent_dim),n_sources=int(args.num_sources))
+else:
+    model = DCAE(
+            dimx=dimx,
+            dimz=dimz,
+            dimh=dimh,
+            dimg=dimg,
+            num_sources=args.num_sources,
+            net_type=args.net_type,
+            num_layers=args.num_layers,
+            scale_invariant=True,
+            layer_channels=tuple(args.cnn_channels),
+            kernel_size=kernel_size,stride=stride,padding=padding,
+            )
 
 model.load_state_dict(load_state_dict(path=os.path.join(args.model_directory,args.job_id) + "/" + model_name))
 model.to(device)

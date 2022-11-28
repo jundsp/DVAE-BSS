@@ -308,7 +308,6 @@ class VAE(nn.Module):
         chans = (2560, 2048, 1536, 1024, 512)
 
         self.out_z = nn.Linear(chans[-1],2*self.n_sources*self.dimz)
-        self.out_w = nn.Linear(chans[-1],self.n_sources)
 
         self.Encoder = nn.Sequential(
             LinearBlock(self.dimx, chans[0]),
@@ -328,11 +327,8 @@ class VAE(nn.Module):
             )
 
         self.register_parameter('variance',nn.Parameter(torch.ones(1)*.1,requires_grad=False))
-        self.register_parameter('smu',nn.Parameter(torch.zeros(1,n_sources,self.dimz)))
-        self.register_parameter('smu0',nn.Parameter(torch.zeros(1,n_sources,self.dimz)))
-        self.register_buffer('slogvar',torch.zeros(1,n_sources,self.dimz))
-        self.register_buffer('slogvar0',torch.zeros(1,n_sources,self.dimz))
-
+        self.register_parameter('m0',nn.Parameter(torch.zeros(1,n_sources*self.dimz)))
+        
     def get_variance(self):
         return self.variance*1.0
 
@@ -356,7 +352,7 @@ class VAE(nn.Module):
 
     def forward(self, x):
         xshape = x.shape
-        mu, logvar = self.encode(x.view(-1, self.dimx))
+        mu, logvar = self.encode(x.reshape(-1, self.dimx))
         if self.variational is True:
             z = self.reparameterize(mu, logvar)
             recon_x, recons = self.decode(z)
@@ -368,7 +364,7 @@ class VAE(nn.Module):
             'recon_s': recons.view(-1,recons.shape[1],xshape[-2],xshape[-1]), 
             'mu_q': mu, 
             'logvar_q': logvar,
-            'mu_p': torch.zeros_like(mu), 
+            'mu_p': self.m0, 
             'logvar_p': torch.zeros_like(logvar), 
             'mu0_q': torch.zeros(1,device=mu.device), 
             'logvar0_q': torch.zeros(1,device=mu.device), 

@@ -20,7 +20,6 @@ import time
 from datetime import datetime
 from subprocess import call
 
-
 def dict_average(input):
     avg = {}
     for k,v in input.items():
@@ -66,7 +65,7 @@ def save_result(x,x_hat,s_hat,filename='result.png',epoch=1):
     ax[0,0].set_title('epoch = {}'.format(epoch))
     plt.tight_layout()
     plt.savefig(filename)    
-    writer.add_figure('Results', fig, epoch)
+    writer.add_figure(tag='Results', figure=fig)
     plt.close()    
 
 def save_sample(N=10,filename='result.png',epoch=1):
@@ -86,7 +85,7 @@ def save_sample(N=10,filename='result.png',epoch=1):
     ax[1].imshow(Z.T,**kwds)
     plt.tight_layout()
     plt.savefig(filename)    
-    writer.add_figure('Samples', fig, epoch)
+    writer.add_figure(tag='Samples', figure=fig)
     plt.close()  
 
 def save_info(info,category='Train',epoch=1):
@@ -159,7 +158,7 @@ def test(epoch,lossfun,test_loader,test_rank):
         if test_rank == 0:
             print(('\t \t VALIDATE | Loss = {:4.6f}\t| ELL = {:4.6f}\t| KLD = {:4.6f}').format(info['loss'].item(), info['ell'].item(), info['kld'].item()))
             save_result(data,output['recon_x'],output['recon_s'],filename=path_results+'/result.png',epoch=epoch)
-            save_sample(N=output['mu_q'].size(1),filename=path_results+'/sample.png',epoch=epoch)
+            # save_sample(N=output['mu_q'].size(1),filename=path_results+'/sample.png',epoch=epoch)
             save_info(info,category='Test',epoch=epoch)
     return info
 
@@ -198,44 +197,13 @@ if __name__ == "__main__":
     print("process group ready!")
     
     kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if args.cuda else {}
-    
 
-    if args.dataset == 'MNIST':
-        dim_data = (33,32)
-        transform = transforms.Compose([transforms.CenterCrop(size=dim_data),transforms.RandomAffine(degrees=0,translate=(0.05,0.2)),transforms.ToTensor()])
-        train_set = datasets.MNIST(args.data_directory, train=True, transform=transform, download=True)
-        test_set = datasets.MNIST(args.data_directory, train=False, transform=transform, download=True)
-        pipeline = ImagePipeline(n_src=args.num_sources,duration=args.duration,shift=.1)
+    train_set, test_set = get_datasets(dataset=args.dataset,path=args.data_directory,args=args)
 
-    if args.dataset == 'MUMS':
-        dim_data = (128,args.duration)
-        train_set = Audioset(args.data_directory + '/MUMS/DVDs', spectrogram=True, duration=dim_data[1], bins=dim_data[0])
-        test_set = Audioset(args.data_directory + '/MUMS/DVDs/WOODWINDS/SAXOPHONES/', spectrogram=True, duration=dim_data[1], bins=dim_data[0])
-                
-    if args.dataset == 'RWC':
-        nfft = 512
-        dim_data = (nfft//2+1,args.duration)
-        train_set = Audioset(root=args.data_directory + '/RWC_dataset',path_csv='train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
-        test_set =  Audioset(root=args.data_directory + '/RWC_dataset',path_csv='validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
+    # pipeline = ImagePipeline(n_src=args.num_sources,duration=args.duration,shift=.1)
 
-    if args.dataset == 'VCTK':
-        nfft = 512
-        dim_data = (nfft//2+1,args.duration)
-        train_set = Audioset(root=args.data_directory + '/VCTK',path_csv='train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.1,starting=.5)
-        test_set =  Audioset(root=args.data_directory + '/VCTK',path_csv='validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.1,starting=.5)
-
-    if args.dataset == 'composite':
-        nfft = 512
-        dim_data = (nfft//2+1,args.duration)
-        train_set = Audioset(root=args.data_directory,path_csv='composite/train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=.5)
-        test_set =  Audioset(root=args.data_directory,path_csv='composite/validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=.5)
-
-    if args.dataset == 'nsynth':
-        nfft = 512
-        dim_data = (nfft//2+1,args.duration)
-        kwds_dset = dict(augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=0,remove_silence=args.remove_silence)
-        train_set = Audioset(root=args.data_directory + '/nsynth-train',path_csv=None,**kwds_dset)
-        test_set =  Audioset(root=args.data_directory + '/nsynth-valid',path_csv=None,**kwds_dset)
+    nfft = 512
+    dim_data = (nfft//2+1,args.n_time)
 
     mixer = Mixer(n_sources=args.num_targets,average=args.average_mix)
     pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
@@ -265,8 +233,8 @@ if __name__ == "__main__":
     os.makedirs(path_saves,exist_ok=True)
     os.makedirs(path_runs,exist_ok=True)
 
-    net_type = str(args.net_type)
-    writer = SummaryWriter(log_dir=path_runs,comment=net_type + '_' + str(args.dataset))
+    model_type = str(args.model_type)
+    writer = SummaryWriter(log_dir=path_runs,comment=model_type + '_' + str(args.dataset))
 
     dimx = dim_data[0]
     dimz = args.latent_dim
@@ -278,7 +246,7 @@ if __name__ == "__main__":
 
     model_name = ('{}/{}_{}_K{}_L{}_{}_D{}_C{}-{}.pt').format(
         path_saves,
-        net_type,
+        model_type,
         args.dataset,
         str(args.num_sources),
         str(args.num_layers),
@@ -288,8 +256,9 @@ if __name__ == "__main__":
         int(10)
         )
 
-    if net_type == 'vae':
-        model = VAE(dimx=dim_data[0]*dim_data[1],dimz=args.latent_dim,n_sources=args.num_sources)
+    if model_type == 'vae':
+        dimx = int(dim_data[0]*dim_data[1])
+        model = VAE(dimx=dimx,dimz=int(args.latent_dim),n_sources=int(args.num_sources))
     else:
         if args.conv2d:
             kernel_size=(3,3)

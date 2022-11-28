@@ -57,5 +57,4 @@ parser.add_argument('--max-files', type=int, default=100, metavar='fname',
 parser.add_argument('--num-targets', type=int, default=2, metavar='fname',
                     help='number of targets in the mixture concurrently (default 2)')
 parser.add_argument('--cnn-channels',type=int,nargs='+',default=[32,64,128,128])
-parser.add_argument('--net-type', type=str, default='svae', metavar='netname',
-                    help='Network type, svae or vae')
+parser.add_argument('--model-type', type=str, default='svae')
