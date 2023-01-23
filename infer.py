@@ -20,6 +20,7 @@ import seaborn as sns
 from utils.utils import torchToNumpy, mag2db
 import glob
 import re
+import samplerate 
 
 #* Make a class / module to process the bss eval measures.
 
@@ -69,18 +70,21 @@ torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 
 # Check the parameters of the model saved in that directory.
-
+root = "/Users/julian/Desktop/svae-eval/svae-s5/"
+args.model_directory = root + "models"
 os.chdir(args.model_directory)
 model_name = glob.glob("*.pt")[0]
 print(model_name)
-match = re.match(r'svae_([^_]+)_K(\d+)_L1_pooled_D(\d+)_C(\d+)-10.pt', model_name)
+match = re.match(r'svae_([^_]+)_S(\d+)_K(\d+)_L1_pooled_D(\d+)_C(\d+)-10.pt', model_name)
 
-args.num_sources = int(match.group(2))
-args.latent_dim = int(match.group(3))
-args.compression = float(match.group(4)) * .1
+args.num_targets = int(match.group(2))
+args.num_sources = int(match.group(3))
+args.latent_dim = int(match.group(4))
+args.compression = float(match.group(5)) * .1
 args.conv2d = True
 args.rnn_dim = 1024
 
+print(args.num_targets)
 print(args.num_sources)
 print(args.latent_dim)
 print(args.compression)
@@ -101,10 +105,13 @@ mixer = mixer.to(device)
 pipeline = pipeline.to(device)
 
 #%%
-input_file = "/Users/julian/Documents/MATLAB/sounds/trombone_violin.wav"
+filename = "trombone_violin"
+input_file = "/Users/julian/Documents/MATLAB/sounds/{}.wav".format(filename)
 data,sr = torchaudio.load(input_file)
 
-data = torchaudio.functional.resample(data,orig_freq=sr,new_freq=16000.0,resampling_method='kaiser_window')
+# data = torchaudio.functional.resample(data,orig_freq=sr,new_freq=16000.0,resampling_method='kaiser_window')
+data = samplerate.resample(data.numpy().ravel(),16000.0/sr)
+data = torch.from_numpy(data).view(1,-1)
 
 #%% LOAD MODEL
 
@@ -153,6 +160,9 @@ with torch.no_grad():
 
 
 # %%
+args.output_directory = root + filename
+os.makedirs(args.output_directory,exist_ok=True)
+
 kwds = dict(cmap='jet',origin='lower',aspect='auto',interpolation='none',vmax=15)
 pipeline.compression = 1.0
 n = 0
@@ -172,7 +182,9 @@ for i in range(1,args.num_sources):
 for i in range(2,args.num_sources):
     ax[1,i].remove()
 
+plt.savefig(args.output_directory + "/spectrograms.pdf")
 # %%
+
 torchaudio.save(args.output_directory + "/mix.wav",mix[n].unsqueeze(0).cpu() / 2,16000)
 for i in range(estimates.shape[1]):
     torchaudio.save(args.output_directory + "/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0).cpu() / 2,16000)
