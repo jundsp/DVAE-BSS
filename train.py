@@ -101,8 +101,8 @@ def train(epoch,lossfun,train_loader,train_rank):
     
     for batch_idx, (data,_) in enumerate(train_loader):
         
-        data, sources = mixer(data.to(device))
-        data = pipeline(data)
+        data, sources = mixer(data)
+        data = pipeline(data.to(device))
 
         output = model(data)
         ell, kld = lossfun(data,output)
@@ -139,8 +139,8 @@ def test(epoch,lossfun,test_loader,test_rank):
     info = {'loss':[],'ell':[],'kld':[]}
     with torch.no_grad():
         for batch_idx, (data,_) in enumerate(test_loader):
-            data, sources = mixer(data.to(device))
-            data = pipeline(data)
+            data, sources = mixer(data)
+            data = pipeline(data.to(device))
 
             output = model(data)
             ell, kld = lossfun(data,output)
@@ -207,7 +207,7 @@ if __name__ == "__main__":
 
     mixer = Mixer(n_sources=args.num_targets,average=args.average_mix)
     pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
-    mixer = mixer.to(device)
+    # mixer = mixer.to(device)
     pipeline = pipeline.to(device)
 
     print("Trainset -> found {} files.".format(len(train_set)))
@@ -240,14 +240,15 @@ if __name__ == "__main__":
     dimz = args.latent_dim
     dimh = args.rnn_dim
     dimg = args.rnn_dim
-    lr = 2e-4
+    lr = 1e-4
     
     print('From Rank: {}, ==> Making model..'.format(rank))
 
-    model_name = ('{}/{}_{}_K{}_L{}_{}_D{}_C{}-{}.pt').format(
+    model_name = ('{}/{}_{}_S{}_K{}_L{}_{}_D{}_C{}-{}.pt').format(
         path_saves,
         model_type,
         args.dataset,
+        str(args.num_targets),
         str(args.num_sources),
         str(args.num_layers),
         args.net_type,
@@ -276,6 +277,7 @@ if __name__ == "__main__":
                 scale_invariant=True,
                 layer_channels=tuple(args.cnn_channels),
                 kernel_size=kernel_size,stride=stride,padding=padding,
+                variance=args.variance,
                 )
         else:
             model = DSAE(
@@ -295,7 +297,7 @@ if __name__ == "__main__":
     
     lossfun = LossFunction().to(device)
 
-    optimizer = optim.Adam(params=model.parameters(),lr=lr)
+    optimizer = optim.AdamW(params=model.parameters(),lr=lr,weight_decay=2e-5)
             
     for epoch in range(1,args.epochs+1):
         train_sampler.set_epoch(epoch)

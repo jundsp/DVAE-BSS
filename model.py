@@ -211,7 +211,7 @@ class DSAE(nn.Module):
 
 
 class DCAE(DSAE):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None,kernel_size=(3,2),stride=(2,1),padding=(1,0)):
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None,kernel_size=(3,2),stride=(2,1),padding=(1,0),variance=.1):
         super(DCAE, self).__init__(dimx=dimx,dimz=dimz)
 
         if layer_channels is None:
@@ -254,7 +254,7 @@ class DCAE(DSAE):
 
         self.likelihood = NormalLikelihood(scale_invariant=scale_invariant)
         self.criteria = nn.BCELoss(reduction='sum')
-        self.register_parameter('variance',nn.Parameter(torch.ones(1)*.1,requires_grad=False))
+        self.register_parameter('variance',nn.Parameter(torch.ones(1)*variance,requires_grad=False))
         self.register_parameter('smu',nn.Parameter(torch.zeros(1,num_sources,self.dimz)))
         self.register_parameter('smu0',nn.Parameter(torch.zeros(1,num_sources,self.dimz)))
         self.register_buffer('slogvar',torch.zeros(1,num_sources,self.dimz))

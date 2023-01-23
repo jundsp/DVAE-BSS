@@ -2,9 +2,7 @@
 import numpy as np
 from pathlib import Path
 import os
-import argparse
 import pandas as pd
-import torchaudio
 
 def walk_files(root, suffix, prefix=False, remove_suffix=False):
     root = os.path.expanduser(root)
@@ -18,8 +16,8 @@ def walk_files(root, suffix, prefix=False, remove_suffix=False):
                     fname = os.path.join(root, dirName,fname)
                 yield fname, descr
 
-data_path = Path('/home/jneri/projects/def-depalle/jneri/data/MUMS')
-audio_path = 'wav16'
+data_path = Path('/home/jneri/projects/def-depalle/jneri/data/MUSDB')
+audio_path = 'train'
 input_path = data_path.joinpath(audio_path)
 output_path = data_path
 
@@ -29,8 +27,8 @@ _walker = list(walker)
 n_files = len(_walker)
 
 # #%%
-test = 500
-validation = 1000
+test = 0
+validation = 0
 train = n_files - (validation+test)
 idx = np.random.permutation(n_files)
 
