@@ -58,3 +58,5 @@ parser.add_argument('--num-targets', type=int, default=2, metavar='fname',
                     help='number of targets in the mixture concurrently (default 2)')
 parser.add_argument('--cnn-channels',type=int,nargs='+',default=[32,64,128,128])
 parser.add_argument('--model-type', type=str, default='svae')
+parser.add_argument('--variance', type=float, default=.1, metavar='fname',
+                    help='variance of loss')

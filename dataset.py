@@ -56,6 +56,10 @@ def get_datasets(dataset,path,args):
         train_set = Audioset(root=path + '/nsynth-train',path_csv=None,**kwds_dset)
         test_set =  Audioset(root=path + '/nsynth-valid',path_csv=None,**kwds_dset)
 
+    if dataset == 'MUSDB':
+        train_set = Audioset(root=path + '/MUSDB',path_csv='train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=0.0,starting=60)
+        test_set =  Audioset(root=path + '/MUSDB',path_csv='validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=0.0,starting=60)
+
     return train_set, test_set
     
 class STFT(nn.Module):
@@ -405,11 +409,12 @@ class Mixer(torch.nn.Module):
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
-    dataset = Audioset(root='/home/jneri/projects/def-depalle/jneri/data/nsynth/',duration=8,path_csv=None,silence=.1,starting=.1,max_files=10,augment_levels=True)
-    dataloader = torch.utils.data.DataLoader(dataset,batch_size=64,shuffle=True)
-    pipeline = AudioPipeline(n_fft=512,n_time=1025,hop_length=128,compression=.5)
-    mixer = Mixer(n_sources=2,average=True)
+    dataset = Audioset(root='/home/jneri/projects/def-depalle/jneri/data/MUSDB/',duration=300,path_csv=None,silence=0,starting=60,max_files=2,augment_levels=False)
+    dataloader = torch.utils.data.DataLoader(dataset,batch_size=4,shuffle=True)
+    pipeline = AudioPipeline(n_fft=512,n_time=16400,hop_length=128,compression=.5)
+    mixer = Mixer(n_sources=1,average=False)
     #%%
+    
     x,_ = next(iter(dataloader))
 
     data,sources = mixer(x)
@@ -423,6 +428,6 @@ if __name__ == "__main__":
     fig,ax = plt.subplots(3,figsize=(6,6))
     ax[0].imshow(mag2db(X[n]),aspect='auto',origin='lower',cmap='jet')
     ax[1].imshow(mag2db(S[n,0]),aspect='auto',origin='lower',cmap='jet')
-    ax[2].imshow(mag2db(S[n,1]),aspect='auto',origin='lower',cmap='jet')
+    # ax[2].imshow(mag2db(S[n,1]),aspect='auto',origin='lower',cmap='jet')
     
 # %%

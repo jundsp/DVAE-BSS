@@ -98,8 +98,8 @@ nfft = 512
 averaged = False
 dim_data = (nfft//2+1,args.duration)
 
-mixer = Mixer(n_sources=2,average=averaged)
-args.n_time = 513
+mixer = Mixer(n_sources=args.num_targets,average=averaged)
+args.n_time = 8193
 pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
 mixer = mixer.to(device)
 pipeline = pipeline.to(device)
@@ -166,21 +166,25 @@ os.makedirs(args.output_directory,exist_ok=True)
 kwds = dict(cmap='jet',origin='lower',aspect='auto',interpolation='none',vmax=15)
 pipeline.compression = 1.0
 n = 0
-fig,ax = plt.subplots(3,args.num_sources,figsize=(3*args.num_sources,9))
+fig,ax = plt.subplots(args.num_sources,3,figsize=(9,3*args.num_sources))
 ax[0,0].imshow(mag2db(pipeline(mix[n])+1e-9).cpu(),**kwds)
-ax[1,0].imshow(mag2db(pipeline(sources[n,0])+1e-9).cpu(),**kwds)
-ax[1,1].imshow(mag2db(pipeline(sources[n,1])+1e-9).cpu(),**kwds)
+for i in range(args.num_targets):
+    ax[i,1].imshow(mag2db(pipeline(sources[n,i])+1e-9).cpu(),**kwds)
 for i in range(args.num_sources):
-    ax[2,i].imshow(mag2db(pipeline(estimates[n,i])+1e-9).cpu(),**kwds)
+    ax[i,2].imshow(mag2db(pipeline(estimates[n,i])+1e-9).cpu(),**kwds)
 
 ax[0,0].set_title('Input Mixture')
-ax[1,0].set_title('Target')
-ax[2,0].set_title('Estimates')
+ax[0,1].set_title('Target')
+ax[0,2].set_title('Estimates')
 
 for i in range(1,args.num_sources):
-    ax[0,i].remove()
-for i in range(2,args.num_sources):
-    ax[1,i].remove()
+    ax[i,0].remove()
+for i in range(args.num_targets,args.num_sources):
+    ax[i,1].remove()
+
+plt.savefig(args.output_directory + "/evaluation_spec.png")
+plt.tight_layout()
+plt.close()
 
 plt.savefig(args.output_directory + "/spectrograms.pdf")
 # %%

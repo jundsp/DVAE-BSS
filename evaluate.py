@@ -107,6 +107,7 @@ np.random.seed(args.seed)
 
 #%%
 output_path = os.path.join(args.output_directory,args.job_id)
+output_path = os.path.join(output_path,"t{}".format(args.num_targets))
 output_audio_path = os.path.join(output_path,"audio")
 os.makedirs(output_path,exist_ok=True)
 os.makedirs(output_audio_path,exist_ok=True)
@@ -116,11 +117,12 @@ model_path = os.path.join(args.model_directory,args.job_id)
 
 os.chdir(model_path)
 model_name = glob.glob("*.pt")[0]
-match = re.match(args.model_type+r'_([^_]+)_K(\d+)_L1_pooled_D(\d+)_C(\d+)-10.pt', model_name)
+match = re.match(args.model_type+r'_([^_]+)_S(\d+)_K(\d+)_L1_pooled_D(\d+)_C(\d+)-10.pt', model_name)
 
-args.num_sources = int(match.group(2))
-args.latent_dim = int(match.group(3))
-args.compression = float(match.group(4)) * .1
+num_train_targets = int(match.group(2))
+args.num_sources = int(match.group(3))
+args.latent_dim = int(match.group(4))
+args.compression = float(match.group(5)) * .1
 
 print(args.num_sources)
 print(args.latent_dim)
@@ -147,6 +149,9 @@ if args.dataset == 'MUMS':
 if args.dataset == 'nsynth':
     data_root = args.data_directory + "/nsynth-test/audio"
     path_csv = None
+if args.dataset == 'MUSDB':
+    data_root = args.data_directory + "/MUSDB"
+    path_csv = 'test.csv'
 
 test_set = Audioset(root=data_root,path_csv=path_csv,augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=0,max_files=args.max_files)
 test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=True)
