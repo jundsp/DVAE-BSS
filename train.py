@@ -19,6 +19,7 @@ import torch.utils.data.distributed
 import time
 from datetime import datetime
 from subprocess import call
+import json
 
 def dict_average(input):
     avg = {}
@@ -241,6 +242,9 @@ if __name__ == "__main__":
     dimh = args.rnn_dim
     dimg = args.rnn_dim
     lr = 1e-4
+
+    with open(path_saves+'/configuration.txt', 'w') as f:
+        json.dump(args.__dict__, f, indent=2)
     
     print('From Rank: {}, ==> Making model..'.format(rank))
 

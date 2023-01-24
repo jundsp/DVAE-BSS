@@ -14,8 +14,24 @@ import seaborn as sns
 from utils.utils import torchToNumpy, mag2db, panning
 import glob
 import re
+import shutil
 
 #* Make a class / module to process the bss eval measures.
+
+def save_audio_batch(path,mix,sources,estimates,starting_index):
+    N = mix.shape[0]
+    for n in range(N):
+        output_audio_path_n = path + "/audio_{}".format(starting_index)
+        os.makedirs(output_audio_path_n,exist_ok=True)
+
+        torchaudio.save(output_audio_path_n + "/mix.wav",mix[n].unsqueeze(0).cpu() / 2,16000)
+        for i in range(sources.shape[1]):
+            torchaudio.save(output_audio_path_n + "/source_{}.wav".format(i+1),sources[n,i].unsqueeze(0).cpu(),16000)
+        for i in range(estimates.shape[1]):
+            torchaudio.save(output_audio_path_n + "/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0).cpu(),16000)
+
+        starting_index += 1
+    return starting_index
 
 def load_state_dict(path):
     # original saved file with DataParallel
@@ -101,6 +117,9 @@ def dict_average(input):
     return avg
 
 #%%
+save_audio_files = False
+copy_config = True
+
 args = parser.parse_args()
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
@@ -116,13 +135,16 @@ os.makedirs(output_audio_path,exist_ok=True)
 model_path = os.path.join(args.model_directory,args.job_id)
 
 os.chdir(model_path)
+shutil.copyfile('config.txt', output_path)
+
+
 model_name = glob.glob("*.pt")[0]
 match = re.match(args.model_type+r'_([^_]+)_S(\d+)_K(\d+)_L1_pooled_D(\d+)_C(\d+)-10.pt', model_name)
 
 num_train_targets = int(match.group(2))
 args.num_sources = int(match.group(3))
 args.latent_dim = int(match.group(4))
-args.compression = float(match.group(5)) * .1
+args.compression = int(match.group(5)) * .1
 
 print(args.num_sources)
 print(args.latent_dim)
@@ -195,12 +217,18 @@ model.to(device)
 model.eval()
 
 #%% EVALUATE
+#TODO: SAVE INDIV. SOURCE FILES.
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 SiSDR = []
 SiSIR = []
 SiSAR = []
 Idx = []
+
+starting_index = 0
+
+spectral_averages = 0.0
+
 
 with torch.no_grad():
     for batch_idx, (data,_) in enumerate(test_loader):
@@ -231,8 +259,14 @@ with torch.no_grad():
         SiSAR.append(SAR)
         Idx.append(idx)
 
+        spectral_averages += s_hat.sum(-1).mean(0)
+
         print("Evaluating {} / {} ==> ".format(batch_idx+1,len(test_loader)))
-    
+
+        if save_audio_files:
+            starting_index = save_audio_batch(path=output_audio_path,estimates=estimates,sources=sources,mix=mix,starting_index=starting_index)
+
+spectral_averages /= len(test_loader)
 #%%
 SI_SDR = torch.cat(SiSDR).cpu()
 SI_SIR = torch.cat(SiSIR).cpu()
@@ -241,6 +275,9 @@ Index = torch.cat(Idx).cpu()
 print("SI-SDR = {:4.2f}".format(SI_SDR.mean()))
 print("SI-SIR = {:4.2f}".format(SI_SIR.mean()))
 print("SI-SAR = {:4.2f}".format(SI_SAR.mean()))
+
+df = pd.DataFrame(dict(compression=args.compression,sources=args.num_sources,latent_dim=args.latent_dim,targets=args.num_targets),index=[0])
+df.to_csv(output_path + '/config.csv',index=False) 
 
 df = pd.DataFrame(dict(sdr=SI_SDR.mean().item(),sir=SI_SIR.mean().item(),sar=SI_SAR.mean().item()),index=[0])
 df.to_csv(output_path + '/bss_summary.csv',index=False) 
@@ -253,13 +290,13 @@ plt.grid()
 plt.tight_layout()
 plt.savefig(output_path + "/bss.png")
 plt.close()
+
 # %%
 jet = cm.get_cmap('jet', 256)
 newcolors = jet(np.linspace(0, 1, 256))
 newcolors[0] = (0.0,0.0,0.0,1.0)
 mycmp = ListedColormap(newcolors)
 
-#%%
 kwds = dict(cmap=mycmp,origin='lower',aspect='auto',interpolation='none',vmax=15)
 pipeline.compression = 1.0
 np.random.seed(1)
@@ -284,8 +321,8 @@ for ii,n in enumerate(idx):
     for i in range(args.num_targets,args.num_sources):
         ax[i,1].remove()
 
-    plt.savefig(output_audio_path_n + "/evaluation_spec.png")
     plt.tight_layout()
+    plt.savefig(output_audio_path_n + "/evaluation_spec.png")
     plt.close()
 
     torchaudio.save(output_audio_path_n + "/mix.wav",mix[n].unsqueeze(0).cpu() / 2,16000)
@@ -300,7 +337,6 @@ for ii,n in enumerate(idx):
 
     print(pans)
 
-
     for i in range(nsrc):
         panr = i/(nsrc-1.0)
         panr = pans[i]
@@ -309,3 +345,11 @@ for ii,n in enumerate(idx):
         mix_down += estimates[n,i].view(1,-1).cpu() * pan.view(-1,1)
 
     torchaudio.save(output_audio_path_n + "/mixdown_estimates.wav",mix_down.cpu() / 2,16000)
+
+
+fig,ax = plt.subplots(args.num_sources,figsize=(4,2*args.num_sources))
+for i in range(args.num_sources):
+    ax[i].plot(spectral_averages[i])
+plt.tight_layout()
+plt.savefig(output_path + "/spectral_averages.png")
+plt.close()
