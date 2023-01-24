@@ -8,11 +8,11 @@ import glob
 import pandas as pd
 # sns.set()
 
-root = "/Users/julian/Desktop/vae-eval"
+root = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/compression/"
 output_directory = root + "/results"
 os.makedirs(output_directory,exist_ok=True)
 
-csv_name = glob.glob(root + "/*/bss.csv")
+csv_name = glob.glob(root + "K5/*/*/bss.csv")
 DF = []
 for ii,cc in enumerate(csv_name):
     df = pd.read_csv(cc)
