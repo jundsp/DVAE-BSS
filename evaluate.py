@@ -135,7 +135,7 @@ os.makedirs(output_audio_path,exist_ok=True)
 model_path = os.path.join(args.model_directory,args.job_id)
 
 os.chdir(model_path)
-shutil.copyfile('config.txt', output_path)
+shutil.copyfile(model_path + '/configuration.txt', output_path + '/configuration.txt')
 
 
 model_name = glob.glob("*.pt")[0]
@@ -273,8 +273,8 @@ SI_SIR = torch.cat(SiSIR).cpu()
 SI_SAR = torch.cat(SiSAR).cpu()
 Index = torch.cat(Idx).cpu()
 print("SI-SDR = {:4.2f}".format(SI_SDR.mean()))
-print("SI-SIR = {:4.2f}".format(SI_SIR.mean()))
-print("SI-SAR = {:4.2f}".format(SI_SAR.mean()))
+print("SIR = {:4.2f}".format(SI_SIR.mean()))
+print("SAR = {:4.2f}".format(SI_SAR.mean()))
 
 df = pd.DataFrame(dict(compression=args.compression,sources=args.num_sources,latent_dim=args.latent_dim,targets=args.num_targets),index=[0])
 df.to_csv(output_path + '/config.csv',index=False) 
