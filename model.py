@@ -211,7 +211,7 @@ class DSAE(nn.Module):
 
 
 class DCAE(DSAE):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None,kernel_size=(3,2),stride=(2,1),padding=(1,0),variance=.1):
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None,kernel_size=(3,2),stride=(2,1),padding=(1,0),variance=.1,activate_final_layer=False):
         super(DCAE, self).__init__(dimx=dimx,dimz=dimz)
 
         if layer_channels is None:
@@ -248,7 +248,7 @@ class DCAE(DSAE):
         
         kwds_feature_conv = dict(kernel_size=kernel_size,stride=stride,padding=padding)
         self.Encoder = StridedEncoder(1,self.conv_channels,layer_channels=layer_channels,**kwds_feature_conv)
-        self.Decoder = StridedDecoder(self.conv_channels,1,layer_channels=layer_channels,**kwds_feature_conv)
+        self.Decoder = StridedDecoder(self.conv_channels,1,layer_channels=layer_channels,activate_final_layer=activate_final_layer,**kwds_feature_conv)
 
         self.activation = nn.Sigmoid()
 
@@ -431,7 +431,7 @@ class StridedEncoder(nn.Module):
         return self.Network(x)
 
 class StridedDecoder(nn.Module):
-    def __init__(self,input_channels,output_channels,kernel_size=(3,2),stride=(2,1),padding=(1,0),layer_channels=None):
+    def __init__(self,input_channels,output_channels,kernel_size=(3,2),stride=(2,1),padding=(1,0),layer_channels=None,activate_final_layer=False):
         super(StridedDecoder, self).__init__()
 
         if layer_channels is None: 
@@ -444,7 +444,7 @@ class StridedDecoder(nn.Module):
         for ii in range(len(layer_channels)-2,-1,-1):
             mlist.append(ConvTranspose2dLayer(layer_channels[ii+1],layer_channels[ii],**kwds))
 
-        mlist.append(ConvTranspose2dLayer(layer_channels[0],output_channels,activation=False,batchnorm=False,**kwds))
+        mlist.append(ConvTranspose2dLayer(layer_channels[0],output_channels,activation=activate_final_layer,batchnorm=False,**kwds))
 
         self.Network = nn.Sequential(*mlist)
     def forward(self, x):
