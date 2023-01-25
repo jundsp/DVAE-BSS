@@ -61,3 +61,4 @@ parser.add_argument('--model-type', type=str, default='svae')
 parser.add_argument('--variance', type=float, default=.1, metavar='fname',
                     help='variance of loss')
 parser.add_argument('--activate-final-layer', action='store_true', default=False)
+parser.add_argument('--complex-version',action='store_true',default=False)

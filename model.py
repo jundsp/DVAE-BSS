@@ -576,7 +576,7 @@ class LossFunction(nn.Module):
         N = float(N)
             
         # Si-SDR? scale the target... but it is the mixture.
-        ell = self.likelihood(x, mu_x, var=variance) 
+        ell = self.likelihood(x.view(n,-1), mu_x.view(n,-1), var=variance) 
         kld = KLD(mu,logvar,prior_mean=mu_prior,prior_logvar=logvar_prior)
         kld += KLD(mu0,logvar0,prior_mean=smu0,prior_logvar=slogvar0)
         
@@ -598,19 +598,70 @@ def create_masks(x,s_hat):
     return s_hat * (x /  s_hat.sum(1)).unsqueeze(1) 
 
 
+
+class SVAE(DCAE):
+    """
+    Complex-valued input and output (2D input for Real and Imag or Mag and Phase)
+    """
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=True, layer_channels=None, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), variance=0.1, activate_final_layer=False):
+        super().__init__(dimx, dimz, dimh, dimg, chans, num_sources, net_type, num_layers, scale_invariant, layer_channels, kernel_size, stride, padding, variance, activate_final_layer)
+
+        kwds_feature_conv = dict(kernel_size=kernel_size,stride=stride,padding=padding)
+        self.Encoder = StridedEncoder(2,self.conv_channels,layer_channels=layer_channels,**kwds_feature_conv)
+        self.Decoder = StridedDecoder(self.conv_channels,2,layer_channels=layer_channels,activate_final_layer=activate_final_layer,**kwds_feature_conv)
+
+    def decode(self,z):        
+        z = z.transpose(-2,-1)
+        x = self.feature_decoder(z) # B*S X 2 X F X C
+        mag = self.activation(x[:,0])
+        phase = x[:,1]
+        xr = mag * torch.cos(phase)
+        xi = mag * torch.sin(phase)
+        x = torch.stack([xr,xi],1)
+        return x
+
+    def forward(self, x):
+        mu_q, logvar_q, mu0_q, logvar0_q = self.encode(x)
+        z = reparameterize(mu_q,logvar_q)
+        z0 = reparameterize(mu0_q,logvar0_q)
+        mu_p, logvar_p = self.prior(z,z0)
+        mu_s = self.decode(z)
+        recon_s = mu_s.view(-1,self.num_sources,2,mu_s.size(-2),mu_s.size(-1))
+        recon_x = recon_s.sum(1)
+        # recon_x = torch.sqrt((recon_x**2.0).sum(1))
+        
+        n = x.shape[0]
+        out = {
+            'recon_x': recon_x,
+            'recon_s': recon_s, 
+            'mu_q': mu_q, 
+            'logvar_q': logvar_q, 
+            'mu_p': mu_p, 
+            'logvar_p': logvar_p, 
+            'mu0_q': mu0_q, 
+            'logvar0_q': logvar0_q,
+            'smu0': self.batch_and_source(self.smu0,n),
+            'slogvar0':  self.batch_and_source(self.slogvar0,n),
+            'variance': self.get_variance(),
+            }
+        return out
+
+
 #%%
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     dimx = 257
     dimt = 129
-    x = torch.randn(4,dimx,dimt)
+    x = torch.randn(4,2,dimx,dimt)
+    x_full = torch.randn(4,2,dimx,dimt)
+    x = torch.sqrt(x_full[:,0]**2 + x_full[:,1]**2)
 
     
-    model = DCAE(dimx=dimx,dimz=32,kernel_size=(3,3),stride=(2,2),padding=(1,1),layer_channels=(32,64,128,128))
+    model = SVAE(num_sources=2,dimx=dimx,dimz=16,kernel_size=(3,3),stride=(2,2),padding=(1,1),layer_channels=(32,64,128,128),activate_final_layer=False)
 
     with torch.no_grad():
-        output = model(x)
+        output = model(x_full)
 
         lossfun = LossFunction()
         lossfun.forward(x=x,output=output)
@@ -621,11 +672,25 @@ if __name__ == "__main__":
         print(x_hat.shape)
 
         # Test latent space's temporal influence
-        z = torch.zeros(1,8,32)
-        z[0,4] = 1
+        Lz = 16
+        z = torch.zeros(1,Lz,16)
+        z[0,Lz//2] = 1
         # z = z.transpose(-2,-1)
         out = model.decode(z)
 
-    plt.plot(out[0,0].T)
+    ds_factor = 2 << 5
+    starting = Lz*32//2 - ds_factor//2
+    ending = starting + ds_factor
+    dur = ending-starting
+    print(dur)
+    Mag = torch.sqrt(out[:,0]**2.0 + out[:,1]**2.0)
+
+    plt.plot(Mag[0].T[starting-2:ending+2])
+
+    plt.figure()
+    plt.plot(output['recon_x'][0].T)
+
+    # enc = model.encode(out)
+    
 
 # %%

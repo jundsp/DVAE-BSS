@@ -275,12 +275,14 @@ class AudioPipeline(torch.nn.Module):
         hop_length=256,
         stretch_factor=0.8,
         compression=1.0,
+        output_realimag=False,
     ):
         super().__init__()
         
         self.n_time = n_time
         self.spec = torchaudio.transforms.Spectrogram(n_fft=n_fft, power=1,normalized=True, hop_length=hop_length)
         self.compression = compression
+        self.output_realimag = output_realimag
 
         self.spec_aug = torch.nn.Sequential(
             torchaudio.transforms.TimeStretch(stretch_factor, fixed_rate=True),
@@ -313,8 +315,12 @@ class AudioPipeline(torch.nn.Module):
         return self.inverse_stft(stft_linear)
         
     def forward(self, waveform: torch.Tensor) -> torch.Tensor:
-        spec = self.spec(waveform) ** self.compression
-        spec = self.crop(spec)
+        if self.output_realimag:
+            spec = self.forward_complex(waveform)
+            spec = torch.stack([spec.real, spec.imag],1)
+        else:
+            spec = self.spec(waveform) ** self.compression
+            spec = self.crop(spec)
         return spec
 
     
