@@ -135,9 +135,6 @@ os.makedirs(output_audio_path,exist_ok=True)
 model_path = os.path.join(args.model_directory,args.job_id)
 
 os.chdir(model_path)
-shutil.copyfile(model_path + '/configuration.txt', output_path + '/configuration.txt')
-
-
 model_name = glob.glob("*.pt")[0]
 match = re.match(args.model_type+r'_([^_]+)_S(\d+)_K(\d+)_L1_pooled_D(\d+)_C(\d+)-10.pt', model_name)
 
