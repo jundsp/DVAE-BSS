@@ -75,6 +75,8 @@ audio,sr = torchaudio.load(input_file)
 audio = torchaudio.functional.resample(audio,orig_freq=sr,new_freq=16000.0,resampling_method='kaiser_window')
 audio = audio.to(device)
 
+audio = torch.cat([audio]*5,0)
+
 #%%
 model.train() 
 for epoch in range(1,200):

@@ -545,14 +545,16 @@ class NormalLikelihood(nn.Module):
         if var is None:
             var = self.variance
 
-        alpha = torch.ones(mean.shape[0],device=mean.device).view(-1,1,1)
-        mu = mean.clone().detach()
+        n = mean.shape[0]
+        alpha = torch.ones(n,device=mean.device).view(-1,1)
 
         if self.scale_invariant:
-            for i in range(x.shape[0]):
-                d = (mu[i] * mu[i]).sum()
-                if d == 0.0: d += 1.0
-                alpha[i] = (x[i] * mu[i]).sum() / d
+            with torch.no_grad():
+                for i in range(n):
+                    d = (mean[i] * mean[i]).sum()
+                    if d == 0.0: 
+                        d += 1.0
+                    alpha[i] = (x[i] * mean[i]).sum() / d
                 
         eps = x - mean*alpha
 

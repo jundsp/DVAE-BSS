@@ -40,7 +40,7 @@ def save_result_grid(x,x_hat,s_hat,filename='result.png',epoch=1):
     
 def save_result(x,x_hat,s_hat,filename='result.png',epoch=1):    
     # Mask estimate
-    if data.ndim == 4:
+    if x.ndim == 4:
         # convert to absolute values
         x = torch.complex(x[:,0],x[:,1]).abs()
         x_hat = torch.complex(x_hat[:,0],x_hat[:,1]).abs()
@@ -290,6 +290,7 @@ if __name__ == "__main__":
                 variance=args.variance,
                 activate_final_layer=args.activate_final_layer
                 )
+                
             if args.complex_version:
                 model = SVAE(**kwds_model)
             else:
