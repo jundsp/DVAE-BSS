@@ -1,22 +1,13 @@
 #%%
 import torch
-from torch import nn, optim
-from torch.nn import functional as F
-import math
 import torchaudio
 import os
-from matplotlib import cm
-from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 import matplotlib.pyplot as plt
-import argparse
-from torchvision import datasets, transforms
 from model import *
 from dataset import *
-from torchvision.utils import make_grid, save_image
 from argparser import parser
 from utils.utils import optimal_permute
 from collections import OrderedDict
-import seaborn as sns
 from utils.utils import torchToNumpy, mag2db
 import glob
 import re
@@ -98,20 +89,30 @@ nfft = 512
 averaged = False
 dim_data = (nfft//2+1,args.duration)
 
+args.num_targets=1
 mixer = Mixer(n_sources=args.num_targets,average=averaged)
-args.n_time = 8193
+args.n_time = 257+128
 pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
 mixer = mixer.to(device)
 pipeline = pipeline.to(device)
 
 #%%
+
 filename = "trombone_violin"
 input_file = "/Users/julian/Documents/MATLAB/sounds/{}.wav".format(filename)
-data,sr = torchaudio.load(input_file)
+audio,sr = torchaudio.load(input_file)
 
-# data = torchaudio.functional.resample(data,orig_freq=sr,new_freq=16000.0,resampling_method='kaiser_window')
-data = samplerate.resample(data.numpy().ravel(),16000.0/sr)
-data = torch.from_numpy(data).view(1,-1)
+
+# input_file = "/Users/julian/Documents/MATLAB/sounds/example16k_source_1.wav".format(filename)
+# audio1,sr = torchaudio.load(input_file)
+# input_file = "/Users/julian/Documents/MATLAB/sounds/example16k_source_2.wav".format(filename)
+# audio2,sr = torchaudio.load(input_file)
+# audio = torch.cat([audio1,audio2],0)
+# audio += torch.randn(audio.shape)*1e-5
+
+audio = torchaudio.functional.resample(audio,orig_freq=sr,new_freq=16000.0,resampling_method='kaiser_window')
+# audio = samplerate.resample(audio.numpy().ravel(),16000.0/sr)
+# audio = torch.from_numpy(audio).view(1,-1)
 
 #%% LOAD MODEL
 
@@ -142,7 +143,7 @@ model.eval()
 pipeline.compression = args.compression
 
 with torch.no_grad():
-    mix, sources = mixer(waveform=data.to(device))
+    mix, sources = mixer(waveform=audio.to(device))
     mix_stft = pipeline.forward_complex(mix)
     source_stft = pipeline.forward_complex(sources)
 
@@ -155,19 +156,20 @@ with torch.no_grad():
 
     mix = pipeline.invert(mix_stft)
     estimates = pipeline.invert(estimates_stft)
+    sources = pipeline.invert(source_stft)
 
-    estimates = optimal_permute(estimates,torch.stack([mix]*2,1))
+    estimates = optimal_permute(estimates,sources)
 
 
 # %%
 args.output_directory = root + filename
 os.makedirs(args.output_directory,exist_ok=True)
 
-kwds = dict(cmap='jet',origin='lower',aspect='auto',interpolation='none',vmax=15)
+kwds = dict(cmap='jet',origin='lower',aspect='auto',interpolation='none',vmin=-160,vmax=2)
 pipeline.compression = 1.0
 n = 0
 fig,ax = plt.subplots(args.num_sources,3,figsize=(9,3*args.num_sources))
-ax[0,0].imshow(mag2db(pipeline(mix[n])+1e-9).cpu(),**kwds)
+ax[0,0].imshow(mag2db(pipeline(mix[n])+1e-10).cpu(),**kwds)
 for i in range(args.num_targets):
     ax[i,1].imshow(mag2db(pipeline(sources[n,i])+1e-9).cpu(),**kwds)
 for i in range(args.num_sources):
@@ -182,9 +184,9 @@ for i in range(1,args.num_sources):
 for i in range(args.num_targets,args.num_sources):
     ax[i,1].remove()
 
-plt.savefig(args.output_directory + "/evaluation_spec.png")
 plt.tight_layout()
-plt.close()
+plt.savefig(args.output_directory + "/evaluation_spec.png")
+# plt.close()
 
 plt.savefig(args.output_directory + "/spectrograms.pdf")
 # %%
