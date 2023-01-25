@@ -443,7 +443,8 @@ class StridedDecoder(nn.Module):
         mlist.append(ConvTranspose2dLayer(input_channels,layer_channels[-1],**kwds))
         for ii in range(len(layer_channels)-2,-1,-1):
             mlist.append(ConvTranspose2dLayer(layer_channels[ii+1],layer_channels[ii],**kwds))
-        mlist.append(ConvTranspose2dLayer(layer_channels[0],output_channels,batchnorm=False,**kwds))
+
+        mlist.append(ConvTranspose2dLayer(layer_channels[0],output_channels,activation=False,batchnorm=False,**kwds))
 
         self.Network = nn.Sequential(*mlist)
     def forward(self, x):
@@ -599,24 +600,32 @@ def create_masks(x,s_hat):
 
 #%%
 if __name__ == "__main__":
-    enc = StridedEncoder(input_channels=1,output_channels=32)
-    dec = StridedDecoder(input_channels=32,output_channels=1)
-    
+    import matplotlib.pyplot as plt
+
     dimx = 257
     dimt = 129
     x = torch.randn(4,dimx,dimt)
 
-    model = DCAE(dimx=dimx,dimz=32,kernel_size=(3,2),stride=(2,1),padding=(1,0),layer_channels=(32,64,64,64,64))
-
-    model = VAE(dimx=dimx*dimt,dimz=64,n_sources=2)
-    output = model(x)
-
-    lossfun = LossFunction()
-    lossfun.forward(x=x,output=output)
     
-    x_hat = output['recon_x']
+    model = DCAE(dimx=dimx,dimz=32,kernel_size=(3,3),stride=(2,2),padding=(1,1),layer_channels=(32,64,128,128))
 
-    print(x.shape)
-    print(x_hat.shape)
+    with torch.no_grad():
+        output = model(x)
+
+        lossfun = LossFunction()
+        lossfun.forward(x=x,output=output)
+        
+        x_hat = output['recon_x']
+
+        print(x.shape)
+        print(x_hat.shape)
+
+        # Test latent space's temporal influence
+        z = torch.zeros(1,8,32)
+        z[0,4] = 1
+        # z = z.transpose(-2,-1)
+        out = model.decode(z)
+
+    plt.plot(out[0,0].T)
 
 # %%
