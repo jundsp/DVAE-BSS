@@ -546,7 +546,8 @@ class NormalLikelihood(nn.Module):
             var = self.variance
 
         n = mean.shape[0]
-        alpha = torch.ones(n,device=mean.device).view(-1,1)
+        alpha = torch.ones(n,*([1]*(x.ndim-1)),device=mean.device)
+        
 
         if self.scale_invariant:
             with torch.no_grad():
@@ -560,12 +561,48 @@ class NormalLikelihood(nn.Module):
 
         return 0.5*torch.sum(var.log() + (eps).pow(2) / var)
 
+class LaplaceLikelihood(nn.Module):
+    def __init__(self, variance=None, reduction='sum', scale_invariant=False):
+        super(LaplaceLikelihood, self).__init__()
+        if variance is None:
+            variance = torch.tensor(1.0)
+        self.scale_invariant = scale_invariant
+        self.register_buffer("variance",variance)
+
+        self.register_buffer("log2",torch.tensor(2.0).log())
+
+    def forward(self, x, mean, var=None):
+        if var is None:
+            var = self.variance
+        scale = torch.sqrt(0.5*var)
+        
+        n = mean.shape[0]
+        alpha = torch.ones(n,*([1]*(x.ndim-1)),device=mean.device)
+        
+        if self.scale_invariant:
+            with torch.no_grad():
+                for i in range(n):
+                    d = (mean[i] * mean[i]).sum()
+                    if d == 0.0: 
+                        d += 1.0
+                    alpha[i] = (x[i] * mean[i]).sum() / d
+                
+        eps = x - mean*alpha
+
+        return torch.sum(self.log2 + scale.log() + (eps).abs() / scale)
+
+
 class LossFunction(nn.Module):
-    def __init__(self,averaged=True,scale_invariant=True):
+    def __init__(self,averaged=True,scale_invariant=True,complex_version=False,laplace=False):
         super(LossFunction,self).__init__()
         
         self.averaged = averaged        
-        self.likelihood = NormalLikelihood(scale_invariant=scale_invariant)
+
+        if laplace:
+            self.likelihood = LaplaceLikelihood(scale_invariant=scale_invariant)
+        else:
+            self.likelihood = NormalLikelihood(scale_invariant=scale_invariant)
+        self.complex_version = complex_version
         
     def forward(self,x,output):
         mu_x,mu,logvar,mu_prior,logvar_prior, mu0, logvar0 = output['recon_x'], output['mu_q'], output['logvar_q'],output['mu_p'], output['logvar_p'], output['mu0_q'], output['logvar0_q']
@@ -576,9 +613,13 @@ class LossFunction(nn.Module):
         if self.averaged is True:
             N = torch.numel(x)
         N = float(N)
+
+        if self.complex_version:
+            if x.ndim == 4:
+                x = (x**2.0).sum(1).sqrt()
             
         # Si-SDR? scale the target... but it is the mixture.
-        ell = self.likelihood(x.view(n,-1), mu_x.view(n,-1), var=variance) 
+        ell = self.likelihood(x, mu_x, var=variance) 
         kld = KLD(mu,logvar,prior_mean=mu_prior,prior_logvar=logvar_prior)
         kld += KLD(mu0,logvar0,prior_mean=smu0,prior_logvar=slogvar0)
         
@@ -605,22 +646,29 @@ class SVAE(DCAE):
     """
     Complex-valued input and output (2D input for Real and Imag or Mag and Phase)
     """
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=True, layer_channels=None, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), variance=0.1, activate_final_layer=False):
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=True, layer_channels=None, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), variance=0.1, activate_final_layer=False, mag_output=True):
         super().__init__(dimx, dimz, dimh, dimg, chans, num_sources, net_type, num_layers, scale_invariant, layer_channels, kernel_size, stride, padding, variance, activate_final_layer)
 
         kwds_feature_conv = dict(kernel_size=kernel_size,stride=stride,padding=padding)
         self.Encoder = StridedEncoder(2,self.conv_channels,layer_channels=layer_channels,**kwds_feature_conv)
         self.Decoder = StridedDecoder(self.conv_channels,2,layer_channels=layer_channels,activate_final_layer=activate_final_layer,**kwds_feature_conv)
 
+        self.mag_output = mag_output
+
     def decode(self,z):        
         z = z.transpose(-2,-1)
         x = self.feature_decoder(z) # B*S X 2 X F X C
         mag = self.activation(x[:,0])
-        phase = x[:,1]
-        xr = mag * torch.cos(phase)
-        xi = mag * torch.sin(phase)
-        x = torch.stack([xr,xi],1)
-        return x
+        phase = 2*np.pi*x[:,1]
+
+        
+        if self.mag_output:
+            return mag
+        else:
+            xr = mag * torch.cos(phase)
+            xi = mag * torch.sin(phase)
+            x = torch.stack([xr,xi],1)
+            return x
 
     def forward(self, x):
         mu_q, logvar_q, mu0_q, logvar0_q = self.encode(x)
@@ -628,9 +676,14 @@ class SVAE(DCAE):
         z0 = reparameterize(mu0_q,logvar0_q)
         mu_p, logvar_p = self.prior(z,z0)
         mu_s = self.decode(z)
-        recon_s = mu_s.view(-1,self.num_sources,2,mu_s.size(-2),mu_s.size(-1))
-        recon_x = recon_s.sum(1)
-        # recon_x = torch.sqrt((recon_x**2.0).sum(1))
+
+        if self.mag_output:
+            recon_s = mu_s.view(-1,self.num_sources,mu_s.size(-2),mu_s.size(-1))
+            recon_x = recon_s.sum(1)
+        else:
+            recon_s = mu_s.view(-1,self.num_sources,2,mu_s.size(-2),mu_s.size(-1))
+            recon_x = recon_s.sum(1)
+            recon_x = (recon_x**2.0).sum(1).sqrt()
         
         n = x.shape[0]
         out = {
