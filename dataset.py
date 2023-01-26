@@ -415,25 +415,32 @@ class Mixer(torch.nn.Module):
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
-    dataset = Audioset(root='/home/jneri/projects/def-depalle/jneri/data/MUSDB/',duration=300,path_csv=None,silence=0,starting=60,max_files=2,augment_levels=False)
-    dataloader = torch.utils.data.DataLoader(dataset,batch_size=4,shuffle=True)
-    pipeline = AudioPipeline(n_fft=512,n_time=16400,hop_length=128,compression=.5)
+    # dataset = Audioset(root='/home/jneri/projects/def-depalle/jneri/data/MUSDB/',duration=300,path_csv=None,silence=0,starting=60,max_files=2,augment_levels=False)
+    # dataloader = torch.utils.data.DataLoader(dataset,batch_size=4,shuffle=True)
+
+
+
+    pipeline = AudioPipeline(n_fft=512,n_time=64,hop_length=128,compression=.5,output_realimag=False)
+    pipeline_realimg = AudioPipeline(n_fft=512,n_time=64,hop_length=128,compression=.5,output_realimag=True)
     mixer = Mixer(n_sources=1,average=False)
     #%%
     
-    x,_ = next(iter(dataloader))
-
+    x = torch.randn(4,16000)
     data,sources = mixer(x)
 
     print(data.abs().max())
     X = pipeline(data)
+    Xc = pipeline_realimg(data)
+    Xc = torch.complex(Xc[:,0],Xc[:,1])
+    X2 = Xc.abs()
+    Xphase = Xc.angle()
     S = pipeline(sources)
     
     #%%
     n = np.random.randint(X.shape[0])
     fig,ax = plt.subplots(3,figsize=(6,6))
     ax[0].imshow(mag2db(X[n]),aspect='auto',origin='lower',cmap='jet')
-    ax[1].imshow(mag2db(S[n,0]),aspect='auto',origin='lower',cmap='jet')
-    # ax[2].imshow(mag2db(S[n,1]),aspect='auto',origin='lower',cmap='jet')
+    ax[1].imshow(mag2db(Xphase[n]),aspect='auto',origin='lower')
+    ax[2].imshow(mag2db(X2[n]),aspect='auto',origin='lower',cmap='jet')
     
 # %%
