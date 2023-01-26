@@ -41,10 +41,11 @@ def save_result_grid(x,x_hat,s_hat,filename='result.png',epoch=1):
 def save_result(x,x_hat,s_hat,filename='result.png',epoch=1):    
     # Mask estimate
     if x.ndim == 4:
-        # convert to absolute values
-        x = torch.complex(x[:,0],x[:,1]).abs()
-        x_hat = torch.complex(x_hat[:,0],x_hat[:,1]).abs()
-        s_hat = torch.complex(s_hat[:,:,0],s_hat[:,:,1]).abs()
+        x = (x**2.0).sum(1).sqrt()
+    if x_hat.ndim == 4:
+        x_hat = (x_hat**2.0).sum(1).sqrt()
+    if s_hat.ndim == 5:
+        s_hat = (s_hat**2.0).sum(2).sqrt()
         
     M = create_masks(x,s_hat)
         
@@ -292,7 +293,7 @@ if __name__ == "__main__":
                 )
                 
             if args.complex_version:
-                model = SVAE(**kwds_model)
+                model = SVAE(mag_output=False,**kwds_model)
             else:
                 model = DCAE(**kwds_model)
         else:
@@ -311,7 +312,7 @@ if __name__ == "__main__":
     model.to(device)
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[current_device])
     
-    lossfun = LossFunction().to(device)
+    lossfun = LossFunction(complex_version=args.complex_version,laplace=args.laplace).to(device)
 
     optimizer = optim.AdamW(params=model.parameters(),lr=lr,weight_decay=2e-5)
             

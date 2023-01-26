@@ -118,7 +118,6 @@ def dict_average(input):
 
 #%%
 save_audio_files = False
-copy_config = True
 
 args = parser.parse_args()
 torch.manual_seed(args.seed)
@@ -133,6 +132,11 @@ os.makedirs(output_audio_path,exist_ok=True)
 
 # Check the parameters of the model saved in that directory.
 model_path = os.path.join(args.model_directory,args.job_id)
+
+try:
+    shutil.copyfile(model_path + '/configuration.txt', output_path+'/configuration.txt')
+except:
+    print("No config file found in model directory, or problem copying.")
 
 os.chdir(model_path)
 model_name = glob.glob("*.pt")[0]
@@ -207,6 +211,7 @@ else:
             scale_invariant=True,
             layer_channels=tuple(args.cnn_channels),
             kernel_size=kernel_size,stride=stride,padding=padding,
+            activate_final_layer=args.activate_final_layer,
             )
 
 model.load_state_dict(load_state_dict(path=os.path.join(args.model_directory,args.job_id) + "/" + model_name))
@@ -263,6 +268,7 @@ with torch.no_grad():
         if save_audio_files:
             starting_index = save_audio_batch(path=output_audio_path,estimates=estimates,sources=sources,mix=mix,starting_index=starting_index)
 
+spectral_averages = spectral_averages.cpu().numpy()
 spectral_averages /= len(test_loader)
 #%%
 SI_SDR = torch.cat(SiSDR).cpu()
@@ -343,6 +349,8 @@ for ii,n in enumerate(idx):
 
     torchaudio.save(output_audio_path_n + "/mixdown_estimates.wav",mix_down.cpu() / 2,16000)
 
+
+np.save(file=output_path + "/spectral_averages",arr=spectral_averages)
 
 fig,ax = plt.subplots(args.num_sources,figsize=(4,2*args.num_sources))
 for i in range(args.num_sources):
