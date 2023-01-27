@@ -293,7 +293,7 @@ if __name__ == "__main__":
                 )
                 
             if args.complex_version:
-                model = SVAE(mag_output=False,**kwds_model)
+                model = SVAE(mag_output=True,**kwds_model)
             else:
                 model = DCAE(**kwds_model)
         else:
