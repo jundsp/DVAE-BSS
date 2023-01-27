@@ -721,8 +721,8 @@ if __name__ == "__main__":
     with torch.no_grad():
         output = model(x_full)
 
-        lossfun = LossFunction()
-        lossfun.forward(x=x,output=output)
+        lossfun = LossFunction(laplace=True,scale_invariant=True)
+        loss = lossfun.forward(x=x,output=output)
         
         x_hat = output['recon_x']
 
