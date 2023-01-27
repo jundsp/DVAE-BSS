@@ -548,14 +548,14 @@ class NormalLikelihood(nn.Module):
         n = mean.shape[0]
         alpha = torch.ones(n,*([1]*(x.ndim-1)),device=mean.device)
         
-
+        mu = mean.clone().detach()
+        
         if self.scale_invariant:
-            with torch.no_grad():
-                for i in range(n):
-                    d = (mean[i] * mean[i]).sum()
-                    if d == 0.0: 
-                        d += 1.0
-                    alpha[i] = (x[i] * mean[i]).sum() / d
+            for i in range(n):
+                d = (mu[i] * mu[i]).sum()
+                if d == 0.0: 
+                    d += 1.0
+                alpha[i] = (x[i] * mu[i]).sum() / d
                 
         eps = x - mean*alpha
 

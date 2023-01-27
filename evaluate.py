@@ -182,7 +182,7 @@ test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,s
 print("evaluating {} examples.".format(len(test_set)))
 
 mixer = Mixer(n_sources=args.num_targets,average=averaged)
-pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
+pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time,output_realimag=args.complex_version)
 mixer = mixer.to(device)
 pipeline = pipeline.to(device)
 
@@ -200,7 +200,7 @@ if args.model_type == 'vae':
     dimx = int(dim_data[0]*dim_data[1])
     model = VAE(dimx=dimx,dimz=int(args.latent_dim),n_sources=int(args.num_sources))
 else:
-    model = DCAE(
+    kwds_model = dict(
             dimx=dimx,
             dimz=dimz,
             dimh=dimh,
@@ -211,8 +211,13 @@ else:
             scale_invariant=True,
             layer_channels=tuple(args.cnn_channels),
             kernel_size=kernel_size,stride=stride,padding=padding,
-            activate_final_layer=args.activate_final_layer,
+            activate_final_layer=args.activate_final_layer
             )
+                
+    if args.complex_version:
+        model = SVAE(mag_output=True,**kwds_model)
+    else:
+        model = DCAE(**kwds_model)
 
 model.load_state_dict(load_state_dict(path=os.path.join(args.model_directory,args.job_id) + "/" + model_name))
 model.to(device)
@@ -239,7 +244,11 @@ with torch.no_grad():
         source_stft = pipeline.forward_complex(sources)
 
         data = mix_stft.abs()
-        output = model(data)
+        if args.complex_version:
+            input_data = torch.stack([mix_stft.real, mix_stft.imag],1)
+        else:
+            input_data = data
+        output = model(input_data)
 
         s_hat = output['recon_s']
         m_hat = create_masks(data,s_hat)
