@@ -7,6 +7,7 @@ import seaborn as sns
 import glob
 import pandas as pd
 import json
+import torch
 plt.rcParams['figure.dpi'] = 150
 plt.rcParams.update({
     "text.usetex": True,
@@ -114,4 +115,22 @@ sns.pointplot(data=df,x="variance",y='SAR',ax=ax[2],**kwds_line)
 # ax[1].set_title(' 95% confidence interval')
 plt.tight_layout()
 plt.savefig(output_directory + "/lineplot_ci.pdf")
+# %%
+
+
+l1 = torch.nn.L1Loss(reduction='none')
+
+x = torch.tensor(torch.linspace(-3,3,101),requires_grad=True)
+m = torch.zeros(101)
+
+scale = .1
+
+loss = l1(x,m)/scale
+
+
+loss2 = (x-m).abs() / scale
+
+
+plt.plot(loss.detach())
+plt.plot(loss2.detach(),'--')
 # %%

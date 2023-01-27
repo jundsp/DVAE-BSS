@@ -43,6 +43,8 @@ kernel_size=(3,3)
 stride=(2,2)
 padding=(1,1)
 
+# args.activate_final_layer = True
+
 kwds_model = dict(
     dimx=dimx,
     dimz=dimz,
@@ -59,13 +61,13 @@ kwds_model = dict(
     )
     
 if args.complex_version:
-    model = SVAE(**kwds_model)
+    model = SVAE(mag_output=False,**kwds_model)
 else:
     model = DCAE(**kwds_model)
 
 model.to(device)
 
-lossfun = LossFunction().to(device)
+lossfun = LossFunction(complex_version=True).to(device)
 
 optimizer = optim.AdamW(params=model.parameters(),lr=lr,weight_decay=2e-5)
 
@@ -103,6 +105,7 @@ if args.complex_version:
     source_complex = torch.complex(output['recon_s'][:,:,0],output['recon_s'][:,:,1]).detach()
     source_mags = source_complex.abs()
     data_mag = torch.complex(data[:,0],data[:,1]).abs()
+    sources = pipeline.inverse_stft(source_complex)
 else:
     output_mag = output['recon_x'].detach()
     data_mag = data
@@ -119,12 +122,12 @@ ax = np.atleast_1d(ax).ravel()
 for k in range(args.num_sources):
     ax[k].imshow(mag2db(source_mags[0,k]),**kwds)
 
-# # %%
-# sources = pipeline.invert(source_complex)
-# plt.subplot(212)
-# plt.plot(sources[0].T)
-# plt.subplot(211)
-# plt.plot(audio[0])
-# # %%
+# %%
+sources = pipeline.invert(source_complex)
+plt.subplot(212)
+plt.plot(sources[0].T)
+plt.subplot(211)
+plt.plot(audio[0])
+# %%
 
 # %%

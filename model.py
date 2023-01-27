@@ -534,17 +534,15 @@ def KLD(mean_1, logvar_1, prior_mean=0.0, prior_logvar=0.0):
     return  -0.5 * torch.sum(1 + logvar_1 - prior_logvar - (var_1 + (mean_1 - prior_mean).pow(2)) / var_2)
 
 class NormalLikelihood(nn.Module):
-    def __init__(self, variance=None, reduction='sum', scale_invariant=False):
+    def __init__(self, variance=None, reduction='sum', scale_invariant=False,complex=False):
         super(NormalLikelihood, self).__init__()
         if variance is None:
             variance = torch.tensor(1.0)
         self.scale_invariant = scale_invariant
         self.register_buffer("variance",variance)
+        self.complex = complex
 
-    def forward(self, x, mean, var=None):
-        if var is None:
-            var = self.variance
-
+    def get_eps(self,x,mean):
         n = mean.shape[0]
         alpha = torch.ones(n,*([1]*(x.ndim-1)),device=mean.device)
         
@@ -558,6 +556,34 @@ class NormalLikelihood(nn.Module):
                 alpha[i] = (x[i] * mu[i]).sum() / d
                 
         eps = x - mean*alpha
+        return eps
+
+    def get_eps_complex(self,x,mean):
+        n = mean.shape[0]
+        mu = mean.clone().detach()
+        x = torch.complex(x[:,0],x[:,1])
+        mu = torch.complex(mu[:,0],mu[:,1])
+        mean = torch.complex(mean[:,0],mean[:,1])
+        alpha = torch.ones(n,*([1]*(x.ndim-1)),device=mean.device,dtype=x.dtype)
+        
+        if self.scale_invariant:
+            d = (mu.conj() * mu).view(n,-1).sum(-1)
+            d[d==0] = 1.0
+            alpha = (mu.conj() * x).view(n,-1).sum(-1) / d
+            alpha = alpha.view(n,*([1]*(x.ndim-1)))
+                
+        eps = x - alpha*mean
+        eps = torch.stack([eps.real,eps.imag],1)
+        return eps
+
+    def forward(self, x, mean, var=None):
+        if var is None:
+            var = self.variance
+
+        if self.complex:
+            eps = self.get_eps_complex(x,mean)
+        else:
+            eps = self.get_eps(x,mean)
 
         return 0.5*torch.sum(var.log() + (eps).pow(2) / var)
 
@@ -598,14 +624,14 @@ class LaplaceLikelihood(nn.Module):
 class LossFunction(nn.Module):
     def __init__(self,averaged=True,scale_invariant=True,complex_version=False,laplace=False):
         super(LossFunction,self).__init__()
-        
-        self.averaged = averaged        
+
+        self.averaged = averaged  
+        self.complex_version = complex_version
 
         if laplace:
             self.likelihood = LaplaceLikelihood(scale_invariant=scale_invariant)
         else:
-            self.likelihood = NormalLikelihood(scale_invariant=scale_invariant)
-        self.complex_version = complex_version
+            self.likelihood = NormalLikelihood(scale_invariant=scale_invariant,complex=self.complex_version)
         
     def forward(self,x,output):
         mu_x,mu,logvar,mu_prior,logvar_prior, mu0, logvar0 = output['recon_x'], output['mu_q'], output['logvar_q'],output['mu_p'], output['logvar_p'], output['mu0_q'], output['logvar0_q']
@@ -617,9 +643,9 @@ class LossFunction(nn.Module):
             N = torch.numel(x)
         N = float(N)
 
-        if self.complex_version:
-            if x.ndim == 4:
-                x = (x**2.0).sum(1).sqrt()
+        # if self.complex_version:
+        #     if x.ndim == 4:
+        #         x = (x**2.0).sum(1).sqrt()
             
         # Si-SDR? scale the target... but it is the mixture.
         ell = self.likelihood(x, mu_x, var=variance) 
@@ -686,7 +712,6 @@ class SVAE(DCAE):
         else:
             recon_s = mu_s.view(-1,self.num_sources,2,mu_s.size(-2),mu_s.size(-1))
             recon_x = recon_s.sum(1)
-            recon_x = (recon_x**2.0).sum(1).sqrt()
         
         n = x.shape[0]
         out = {
