@@ -571,6 +571,9 @@ class LaplaceLikelihood(nn.Module):
 
         self.register_buffer("log2",torch.tensor(2.0).log())
 
+        self.l1 = nn.L1Loss(reduction='none')
+
+
     def forward(self, x, mean, var=None):
         if var is None:
             var = self.variance
@@ -578,18 +581,18 @@ class LaplaceLikelihood(nn.Module):
         
         n = mean.shape[0]
         alpha = torch.ones(n,*([1]*(x.ndim-1)),device=mean.device)
+        mu = mean.clone().detach()
         
         if self.scale_invariant:
-            with torch.no_grad():
-                for i in range(n):
-                    d = (mean[i] * mean[i]).sum()
-                    if d == 0.0: 
-                        d += 1.0
-                    alpha[i] = (x[i] * mean[i]).sum() / d
+            for i in range(n):
+                d = (mu[i] * mu[i]).sum()
+                if d == 0.0: 
+                    d += 1.0
+                alpha[i] = (x[i] * mu[i]).sum() / d
                 
-        eps = x - mean*alpha
+        l1_result = self.l1(mean*alpha,x)
 
-        return torch.sum(self.log2 + scale.log() + (eps).abs() / scale)
+        return torch.sum(self.log2 + scale.log() + l1_result / scale)
 
 
 class LossFunction(nn.Module):
@@ -718,8 +721,8 @@ if __name__ == "__main__":
     with torch.no_grad():
         output = model(x_full)
 
-        lossfun = LossFunction()
-        lossfun.forward(x=x,output=output)
+        lossfun = LossFunction(laplace=True,scale_invariant=True)
+        loss = lossfun.forward(x=x,output=output)
         
         x_hat = output['recon_x']
 
