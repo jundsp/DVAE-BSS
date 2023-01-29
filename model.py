@@ -683,12 +683,13 @@ class SVAE(DCAE):
         self.Decoder = StridedDecoder(self.conv_channels,2,layer_channels=layer_channels,activate_final_layer=activate_final_layer,**kwds_feature_conv)
 
         self.mag_output = mag_output
+        self.phase_activation = nn.Tanh()
 
     def decode(self,z):        
         z = z.transpose(-2,-1)
         x = self.feature_decoder(z) # B*S X 2 X F X C
         mag = self.activation(x[:,0])
-        phase = 2*np.pi*x[:,1]
+        phase = np.pi*self.phase_activation(x[:,1])
 
         
         if self.mag_output:

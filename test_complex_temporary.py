@@ -26,7 +26,7 @@ nfft = 512
 dim_data = (nfft//2+1,args.n_time)
 
 args.complex_version = True
-args.num_sources = 2
+args.num_sources = 3
 args.compression = .5
 args.n_time = 257
 mixer = Mixer(n_sources=args.num_targets,average=args.average_mix)
@@ -71,7 +71,7 @@ lossfun = LossFunction(complex_version=True).to(device)
 
 optimizer = optim.AdamW(params=model.parameters(),lr=lr,weight_decay=2e-5)
 
-filename = "clar"
+filename = "gspi"
 input_file = "/Users/julian/Documents/MATLAB/sounds/{}.wav".format(filename)
 audio,sr = torchaudio.load(input_file)
 audio = torchaudio.functional.resample(audio,orig_freq=sr,new_freq=16000.0,resampling_method='kaiser_window')
@@ -81,7 +81,7 @@ audio = torch.cat([audio]*5,0)
 
 #%%
 model.train() 
-for epoch in range(1,200):
+for epoch in range(1,100):
     data = pipeline(audio)
     output = model(data)
 
