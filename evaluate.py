@@ -117,7 +117,8 @@ def dict_average(input):
     return avg
 
 #%%
-save_audio_files = False
+write_audio = False
+write_audio_examples = True
 
 args = parser.parse_args()
 torch.manual_seed(args.seed)
@@ -182,7 +183,7 @@ test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,s
 print("evaluating {} examples.".format(len(test_set)))
 
 mixer = Mixer(n_sources=args.num_targets,average=averaged)
-pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time,output_realimag=args.complex_version)
+pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
 mixer = mixer.to(device)
 pipeline = pipeline.to(device)
 
@@ -274,7 +275,7 @@ with torch.no_grad():
 
         print("Evaluating {} / {} ==> ".format(batch_idx+1,len(test_loader)))
 
-        if save_audio_files:
+        if write_audio:
             starting_index = save_audio_batch(path=output_audio_path,estimates=estimates,sources=sources,mix=mix,starting_index=starting_index)
 
 spectral_averages = spectral_averages.cpu().numpy()
@@ -312,7 +313,7 @@ mycmp = ListedColormap(newcolors)
 kwds = dict(cmap=mycmp,origin='lower',aspect='auto',interpolation='none',vmax=15)
 pipeline.compression = 1.0
 np.random.seed(1)
-idx = np.random.permutation(mix.shape[0])[:8]
+idx = np.random.permutation(mix.shape[0])[:4]
 for ii,n in enumerate(idx):
     output_audio_path_n = output_audio_path + "/ex_{}".format(ii+1)
     os.makedirs(output_audio_path_n,exist_ok=True)
@@ -337,26 +338,27 @@ for ii,n in enumerate(idx):
     plt.savefig(output_audio_path_n + "/evaluation_spec.png")
     plt.close()
 
-    torchaudio.save(output_audio_path_n + "/mix.wav",mix[n].unsqueeze(0).cpu() / 2,16000)
-    for i in range(sources.shape[1]):
-        torchaudio.save(output_audio_path_n + "/source_{}.wav".format(i+1),sources[n,i].unsqueeze(0).cpu() / 2,16000)
-    for i in range(estimates.shape[1]):
-        torchaudio.save(output_audio_path_n + "/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0).cpu() / 2,16000)
+    if write_audio_examples:
+        torchaudio.save(output_audio_path_n + "/mix.wav",mix[n].unsqueeze(0).cpu() / 2,16000)
+        for i in range(sources.shape[1]):
+            torchaudio.save(output_audio_path_n + "/source_{}.wav".format(i+1),sources[n,i].unsqueeze(0).cpu() / 2,16000)
+        for i in range(estimates.shape[1]):
+            torchaudio.save(output_audio_path_n + "/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0).cpu() / 2,16000)
 
-    mix_down = torch.zeros((2,mix[n].shape[0]))
-    nsrc = estimates.shape[1]
-    pans  = panning(nsrc)
+        mix_down = torch.zeros((2,mix[n].shape[0]))
+        nsrc = estimates.shape[1]
+        pans  = panning(nsrc)
 
-    print(pans)
+        print(pans)
 
-    for i in range(nsrc):
-        panr = i/(nsrc-1.0)
-        panr = pans[i]
-        panl = 1-panr
-        pan = torch.tensor([panl,panr])
-        mix_down += estimates[n,i].view(1,-1).cpu() * pan.view(-1,1)
+        for i in range(nsrc):
+            panr = i/(nsrc-1.0)
+            panr = pans[i]
+            panl = 1-panr
+            pan = torch.tensor([panl,panr])
+            mix_down += estimates[n,i].view(1,-1).cpu() * pan.view(-1,1)
 
-    torchaudio.save(output_audio_path_n + "/mixdown_estimates.wav",mix_down.cpu() / 2,16000)
+        torchaudio.save(output_audio_path_n + "/mixdown_estimates.wav",mix_down.cpu() / 2,16000)
 
 
 np.save(file=output_path + "/spectral_averages",arr=spectral_averages)
