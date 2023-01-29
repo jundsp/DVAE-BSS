@@ -14,6 +14,7 @@ import pandas as pd
 from utils.utils import mag2db, db2mag
 import torch.nn.functional as F
 import librosa
+from pathlib import Path
 
 def round_pow2(x):
     return int(np.power(2,np.ceil(np.log2(x))))
@@ -242,6 +243,41 @@ class WHAMR(Dataset):
     def __len__(self):
         return self.n_files
 
+
+class AuditoryStreams(Dataset):
+    """AuditoryStreams
+    """
+
+    def __init__(self,root: str, audio_ext=".wav"):
+
+        self._path = Path(root)
+        self._audio_dir = self._path / 'mix'
+        self._audio_ext = audio_ext
+
+        self._info = pd.read_json(self._path / 'mix.json',orient='index')
+
+    def __getitem__(self, n: int):
+        """Load the n-th sample from the dataset.
+
+        Args:
+            n (int): The index of the sample to be loaded
+
+        Returns:
+            (Tensor, int, str, str, str):
+            ``(waveform, sample_rate, info)``
+        """
+        info = self._info.iloc[n]
+        mix_filepath = self._audio_dir / info['filename']
+        stems_filepath = self._audio_dir / info['stemname']
+        audio_mix, _ = torchaudio.load(mix_filepath)
+        audio_stems, _ = torchaudio.load(stems_filepath)
+        dict_out = dict(mix=audio_mix,stems=audio_stems)
+        for i in ['delta_time','delta_semitone']:
+            dict_out[i] = info[i]
+        return dict_out
+
+    def __len__(self) -> int:
+        return len(self._info)
 
 class ImagePipeline(torch.nn.Module):
     def __init__(
