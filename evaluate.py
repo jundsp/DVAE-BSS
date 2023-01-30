@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from model import *
 from dataset import *
 from argparser import parser
-from utils.utils import optimal_permute
+from utils.utils import optimal_permute, ideal_masks
 from collections import OrderedDict
 import seaborn as sns
 from utils.utils import torchToNumpy, mag2db, panning
