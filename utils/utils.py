@@ -51,6 +51,16 @@ def panning(nsrc):
     pans /= 2.0
     return pans
 
-
+def ideal_masks(stft_sources,alpha=1):
+    eps = np.finfo(np.float).eps
+    # compute spectrogram of target source
+    stft_mix = stft_sources.sum(1).unsqueeze(1)
+    X = torch.norm(stft_mix,2,-1) ** alpha
+    S = torch.norm(stft_sources,2,-1) ** alpha
+    model = S.sum(1).unsqueeze(1) + eps
+    Mask = S / model
+    Y = X * Mask
+    Y_binary = X * Mask.round()
+    return Y, Y_binary
 
 # %%
