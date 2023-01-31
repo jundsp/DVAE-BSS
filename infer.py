@@ -6,8 +6,7 @@ import matplotlib.pyplot as plt
 from model import *
 from dataset import *
 from argparser import parser
-from utils.utils import optimal_permute
-from collections import OrderedDict
+from utils.utils import optimal_permute, load_state_dict
 from utils.utils import torchToNumpy, mag2db
 import glob
 import re
@@ -25,19 +24,7 @@ plt.rcParams.update({
 
 #* Make a class / module to process the bss eval measures.
 
-def load_state_dict(path):
-    # original saved file with DataParallel
-    state_dict = torch.load(path,map_location=torch.device(device))
-    # create new OrderedDict that does not contain `module.`
-    
-    new_state_dict = OrderedDict()
-    for k, v in state_dict.items():
-        name = k
-        if 'module.' == name[:7]:
-            name = name[7:] # remove `module.`
-        new_state_dict[name] = v
-    
-    return new_state_dict
+
 
 def make_scale_invariant(estimates,targets):
     k = targets.shape[1]

@@ -183,10 +183,14 @@ class DSAE(nn.Module):
         kld += KLD(mu0,logvar0,prior_mean=prior_mean,prior_logvar=prior_logvar)
         return ell / N , kld / N
 
-    def forward(self, x):
+    def forward(self, x, stochastic=True):
         mu_q, logvar_q, mu0_q, logvar0_q = self.encode(x)
-        z = reparameterize(mu_q,logvar_q)
-        z0 = reparameterize(mu0_q,logvar0_q)
+        if stochastic is True:
+            z = reparameterize(mu_q,logvar_q)
+            z0 = reparameterize(mu0_q,logvar0_q)
+        else:
+            z = mu_q.clone()
+            z0 = mu0_q.clone()
         mu_p, logvar_p = self.prior(z,z0)
         mu_s = self.decode(z)
         mu_s = mu_s.view(-1,self.num_sources,mu_s.size(-2),mu_s.size(-1))
@@ -206,6 +210,7 @@ class DSAE(nn.Module):
             'smu0': self.batch_and_source(self.smu0,n),
             'slogvar0':  self.batch_and_source(self.slogvar0,n),
             'variance': self.get_variance(),
+            'z': z,
             }
         return out
 

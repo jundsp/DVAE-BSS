@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch.nn import Fold
 import scipy.signal as sig
 from scipy.optimize import linear_sum_assignment
+from collections import OrderedDict
 
 def db2mag(x):
 	return torch.pow(torch.ones_like(x)*10.0,x/20.0)
@@ -63,4 +64,63 @@ def ideal_masks(stft_sources,alpha=1):
     Y_binary = X * Mask.round()
     return Y, Y_binary
 
+def load_state_dict(path,device="cpu"):
+    # original saved file with DataParallel
+    state_dict = torch.load(path,map_location=torch.device(device))
+    # create new OrderedDict that does not contain `module.`
+    
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        name = k
+        if 'module.' == name[:7]:
+            name = name[7:] # remove `module.`
+        new_state_dict[name] = v
+    
+    return new_state_dict
+
+def make_scale_invariant(estimates,targets):
+    k = targets.shape[1]
+    estimates = estimates[:,:k]
+    Rss = (targets * targets).sum(-1)
+    alpha = (estimates * targets).sum(-1) / Rss
+    return targets * alpha.unsqueeze(-1)
+
+def compute_measures_batch(estimates, targets, salt=1e-14):
+
+    n = targets.shape[0]
+    k = targets.shape[1]
+    
+    SDR = torch.zeros(n,k,device=estimates.device)
+    SIR = torch.zeros(n,k,device=estimates.device)
+    SAR = torch.zeros(n,k,device=estimates.device)
+
+    Rss = torch.zeros(n,k,k,device=estimates.device)
+    I = torch.eye(k,device=estimates.device)*1e-12
+    for ii in range(n):
+        Rss[ii] = targets[ii] @ targets[ii].T + I
+    
+    for jj in range(k):
+        SDR[:,jj], SIR[:,jj], SAR[:,jj] = compute_measures_batch_one(estimates=estimates[:,jj],targets=targets,Rss=Rss,j=jj,salt=salt)
+
+    return SDR, SIR, SAR
+
+def compute_measures_batch_one(estimates, targets, Rss, j, salt=1e-14):
+    e_true = targets[:,j] 
+    # Get the SIR
+    e_res= estimates - e_true
+    Rsr = (e_res.unsqueeze(1) * targets).sum(-1)
+    b = torch.linalg.solve(Rss,Rsr)
+
+    e_interf = (targets * b.unsqueeze(-1)).sum(1)
+    e_artif = e_res - e_interf
+
+    E_target = (e_true*e_true).sum(-1) + salt
+    E_residual = (e_res*e_res).sum(-1) + salt
+    E_interf = (e_interf*e_interf).sum(-1) + salt
+    E_artif = (e_artif*e_artif).sum(-1) + salt
+
+    SDR = 10*(E_target.log10() - E_residual.log10())
+    SIR = 10*(E_target.log10() - E_interf.log10())
+    SAR = 10*(E_target.log10() - E_artif.log10())
+    return SDR, SIR, SAR
 # %%
