@@ -893,12 +893,12 @@ class TConvSeparator(nn.Module):
         return self.Network(x)
 
 class DSVAE(DCAE):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='strided', num_layers=1, scale_invariant=False, layer_channels=None, kernel_size=(3, 2), stride=(2, 1), padding=(1, 0), dilation=(1, 1), variance=0.1, activate_final_layer=True, separator_kernel_size=1,separator_layers=1,separator_dilation=1):
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='strided', num_layers=1, scale_invariant=False, layer_channels=None, kernel_size=(3, 2), stride=(2, 1), padding=(1, 0), dilation=(1, 1), variance=0.1, activate_final_layer=True, separator_kernel_size=1,separator_layers=1,separator_dilation=1,separator_channels=32):
         super().__init__(dimx, dimz, dimh, dimg, chans, num_sources, net_type, num_layers, scale_invariant, layer_channels, kernel_size, stride, padding, dilation, variance, activate_final_layer, separator_kernel_size)
 
-        layer_channels = int(1/2*(self.encoded_features + self.dimg*self.num_sources))
+        
 
-        self.fc_encoder = TConvSeparator(input_channels=self.encoded_features,output_channels=self.dimg*self.num_sources,kernel_size=separator_kernel_size,stride=1,padding=0,dilation=1,layers=separator_layers)
+        self.fc_encoder = TConvSeparator(input_channels=self.encoded_features,output_channels=self.dimg*self.num_sources,kernel_size=separator_kernel_size,stride=1,padding=0,dilation=1,layers=separator_layers,layer_channels=separator_channels)
 
 
 
