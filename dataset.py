@@ -272,7 +272,7 @@ class AuditoryStreams(Dataset):
         audio_mix, _ = torchaudio.load(mix_filepath)
         audio_stems, _ = torchaudio.load(stems_filepath)
         dict_out = dict(mix=audio_mix,stems=audio_stems)
-        for i in ['delta_time','delta_semitone']:
+        for i in ['delta_time','delta_semitone','physics1','physics2']:
             dict_out[i] = info[i]
         return dict_out
 
@@ -454,6 +454,9 @@ if __name__ == "__main__":
     # dataset = Audioset(root='/home/jneri/projects/def-depalle/jneri/data/MUSDB/',duration=300,path_csv=None,silence=0,starting=60,max_files=2,augment_levels=False)
     # dataloader = torch.utils.data.DataLoader(dataset,batch_size=4,shuffle=True)
 
+    test_set = AuditoryStreams(root="/Users/julian/Documents/Code/data/dataset_harmonic/")
+
+    data = test_set.__getitem__(0)
 
 
     pipeline = AudioPipeline(n_fft=512,n_time=64,hop_length=128,compression=.5,output_realimag=False)
