@@ -205,8 +205,7 @@ if __name__ == "__main__":
     print("process group ready!")
     
     kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if args.cuda else {}
-
-    print(args.data_directory)
+    
 
     train_set, test_set = get_datasets(dataset=args.dataset,path=args.data_directory,args=args)
 
@@ -276,9 +275,9 @@ if __name__ == "__main__":
     else:
         if args.conv2d:
             if args.separator_version:
-                kernel_size=(3,3)
+                kernel_size=(3,2)
                 stride=(2,1)
-                padding=(1,1)
+                padding=(1,0)
             else:
                 kernel_size=(3,3)
                 stride=(2,2)
