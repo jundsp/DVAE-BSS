@@ -28,7 +28,7 @@ DF = []
 for ii,cc in enumerate(csv_name):
     df = pd.read_csv(cc)
     df.rename(columns={'Source': 'estimate'},inplace=True)
-    df['estimate'] +=1
+    df['estimate'] = 2-df['estimate']
 
 
     fname = os.path.dirname(cc) + "/configuration.txt"
@@ -64,7 +64,7 @@ plt.savefig(output_directory + "/boxplot_nofill.pdf")
 
 #%%
 fig,ax = plt.subplots(1,3,figsize=(10,3))
-kwds_box = dict(showfliers=False)
+kwds_box = dict(showfliers=False,whis=0)
 sns.boxplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],**kwds_box)
 sns.boxplot(data=df,x=compare_along,y='SIR',ax=ax[1],**kwds_box)
 sns.boxplot(data=df,x=compare_along,y='SAR',ax=ax[2],**kwds_box)
@@ -108,11 +108,14 @@ plt.savefig(output_directory + "/lineplot_sd.pdf")
 
 #%%
 fig,ax = plt.subplots(1,3,figsize=(10,3))
-kwds_line = dict(estimator='median',errorbar=('ci', 95),hue='sources')
+kwds_line = dict(estimator='median',hue='estimate')
 sns.pointplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],**kwds_line)
 sns.pointplot(data=df,x=compare_along,y='SIR',ax=ax[1],**kwds_line)
 sns.pointplot(data=df,x=compare_along,y='SAR',ax=ax[2],**kwds_line)
 # ax[1].set_title(' 95% confidence interval')
+for _ax in ax:
+    # _ax.set_xlim(2,6)
+    _ax.set_xlabel(r'model sources $K$')
 plt.tight_layout()
 plt.savefig(output_directory + "/lineplot_ci.pdf")
 # %%

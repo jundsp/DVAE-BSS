@@ -273,9 +273,14 @@ if __name__ == "__main__":
         model = VAE(dimx=dimx,dimz=int(args.latent_dim),n_sources=int(args.num_sources))
     else:
         if args.conv2d:
-            kernel_size=(3,3)
-            stride=(2,2)
-            padding=(1,1)
+            if args.separator_version:
+                kernel_size=(3,3)
+                stride=(2,1)
+                padding=(1,0)
+            else:
+                kernel_size=(3,3)
+                stride=(2,2)
+                padding=(1,1)
 
             kwds_model = dict(
                 dimx=dimx,
@@ -294,6 +299,8 @@ if __name__ == "__main__":
                 
             if args.complex_version:
                 model = SVAE(mag_output=False,**kwds_model)
+            elif args.separator_version:
+                model = DSVAE(separator_layers=args.separator_layers,separator_kernel_size=2,**kwds_model)
             else:
                 model = DCAE(**kwds_model)
         else:

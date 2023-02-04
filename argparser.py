@@ -37,15 +37,15 @@ parser.add_argument('--duration', type=float, default=8, metavar='fname',
                     help='duration in seconds')
 parser.add_argument('--n-time', type=int, default=513, metavar='N',
                     help='Time frames')
-parser.add_argument('--data-directory', type=str, default='/Users/julian/Documents/Code/data', metavar='fname',
+parser.add_argument('--data-directory', type=str, default='/Volumes/JulianSSD/data', metavar='fname',
                     help='Folder containing the spectrogram data')
-parser.add_argument('--output-directory', type=str, default='/Users/julian/Desktop', metavar='fname', help='Folder to save output data')
-parser.add_argument('--model-directory', type=str, default='/Users/julian/Desktop', metavar='fname',help='Folder that has models.')
+parser.add_argument('--output-directory', type=str, default='/Users/julian/Documents/Code/Python/Results/SVAE', metavar='fname', help='Folder to save output data')
+parser.add_argument('--model-directory', type=str, default='/Users/julian/Documents/Code/Python/Results/SVAE/RWC/compression/K5/', metavar='fname',help='Folder that has models.')
 parser.add_argument('--net-type', type=str, default='pooled', metavar='fname',
                     help='name of the dataset')
 parser.add_argument('--num-layers', type=int, default=1, metavar='fname',
                     help='number of sources in the model')
-parser.add_argument('--job-id', type=str, default='local', metavar='fname',
+parser.add_argument('--job-id', type=str, default='230122-13058078', metavar='fname',
                     help='Slurm job id')
 parser.add_argument('--compression', type=float, default=1)
 parser.add_argument('--init_method', default='tcp://127.0.0.1:3456', type=str, help='')
@@ -62,4 +62,5 @@ parser.add_argument('--variance', type=float, default=.1, metavar='fname',
                     help='variance of loss')
 parser.add_argument('--activate-final-layer', action='store_true', default=False)
 parser.add_argument('--complex-version',action='store_true',default=False)
+parser.add_argument('--separator-version',action='store_true',default=False)
 parser.add_argument('--laplace',action='store_true',default=False)

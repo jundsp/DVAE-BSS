@@ -56,12 +56,15 @@ def ideal_masks(stft_sources,alpha=1):
     eps = np.finfo(np.float).eps
     # compute spectrogram of target source
     stft_mix = stft_sources.sum(1).unsqueeze(1)
-    X = torch.norm(stft_mix,2,-1) ** alpha
-    S = torch.norm(stft_sources,2,-1) ** alpha
+    X = stft_mix.abs() ** alpha
+    S = stft_sources.abs() ** alpha
     model = S.sum(1).unsqueeze(1) + eps
     Mask = S / model
     Y = X * Mask
     Y_binary = X * Mask.round()
+    phase_part = np.exp(1j*stft_mix.angle())
+    Y = Y * phase_part
+    Y_binary = Y_binary * phase_part
     return Y, Y_binary
 
 def load_state_dict(path,device="cpu"):
@@ -85,7 +88,7 @@ def make_scale_invariant(estimates,targets):
     alpha = (estimates * targets).sum(-1) / Rss
     return targets * alpha.unsqueeze(-1)
 
-def compute_measures_batch(estimates, targets, salt=1e-14):
+def compute_measures_batch(estimates, targets, salt=1e-12):
 
     n = targets.shape[0]
     k = targets.shape[1]
@@ -95,9 +98,9 @@ def compute_measures_batch(estimates, targets, salt=1e-14):
     SAR = torch.zeros(n,k,device=estimates.device)
 
     Rss = torch.zeros(n,k,k,device=estimates.device)
-    I = torch.eye(k,device=estimates.device)*1e-12
+    I = torch.eye(k,device=estimates.device)*salt
     for ii in range(n):
-        Rss[ii] = targets[ii] @ targets[ii].T + I
+        Rss[ii] = (targets[ii] @ targets[ii].T + I)
     
     for jj in range(k):
         SDR[:,jj], SIR[:,jj], SAR[:,jj] = compute_measures_batch_one(estimates=estimates[:,jj],targets=targets,Rss=Rss,j=jj,salt=salt)
@@ -123,4 +126,18 @@ def compute_measures_batch_one(estimates, targets, Rss, j, salt=1e-14):
     SIR = 10*(E_target.log10() - E_interf.log10())
     SAR = 10*(E_target.log10() - E_artif.log10())
     return SDR, SIR, SAR
+
+def receptive_field(kernel_size=3,stride=2):
+    kernel_size = np.atleast_1d(kernel_size)
+    stride = np.atleast_1d(stride)
+    
+    field = np.concatenate([np.atleast_1d(1),kernel_size],0)
+    stride = np.concatenate([np.atleast_1d(1),stride],0)
+    layers = len(field)
+    r = np.zeros(layers).astype(int)
+    
+    r[-1] = 1
+    for i in range(layers-1,0,-1):
+        r[i-1] = stride[i]*r[i] + (field[i]-stride[i])
+    return r
 # %%

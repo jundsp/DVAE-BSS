@@ -107,7 +107,7 @@ class Audioset(Dataset):
             self._walker = list(walker)
         else:
             print(os.path.join(root,path_csv))
-            self._walker = pd.read_csv(os.path.join(root,path_csv),header=None,sep='\t')[0].tolist()
+            self._walker = pd.read_csv(os.path.join(root,path_csv))['path'].tolist()
            
 
         self.n_files = len(self._walker)
@@ -126,7 +126,7 @@ class Audioset(Dataset):
             waveform = waveform.mean(0)
             
         if samplerate != self.samplerate:
-            print("resampling")
+            # print("resampling")
             try:
                 waveform = torchaudio.functional.resample(waveform,orig_freq=samplerate,new_freq=self.samplerate)
             except:
@@ -316,6 +316,8 @@ class AudioPipeline(torch.nn.Module):
         super().__init__()
         
         self.n_time = n_time
+        self.n_fft = n_fft
+        self.hop_length = hop_length
         self.spec = torchaudio.transforms.Spectrogram(n_fft=n_fft, power=1,normalized=True, hop_length=hop_length)
         self.compression = compression
         self.output_realimag = output_realimag
@@ -446,7 +448,8 @@ class Mixer(torch.nn.Module):
             mix = sources.sum(1)
             return mix, sources
         
-        
+
+
 #%%
 if __name__ == "__main__":
     import matplotlib.pyplot as plt

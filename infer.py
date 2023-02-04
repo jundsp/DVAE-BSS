@@ -1,19 +1,17 @@
 #%%
 import torch
-import torchaudio
+from torchaudio.transforms import Spectrogram
 import os
 import matplotlib.pyplot as plt
 from model import *
 from dataset import *
 from argparser import parser
-from utils.utils import optimal_permute, load_state_dict
-from utils.utils import torchToNumpy, mag2db
-import glob
-import re
-import samplerate 
-from evaluate import compute_measures_batch
-from torch.utils.data import DataLoader
-import torch.nn.functional as F
+from utils.utils import load_state_dict
+import json
+import soundfile as sf
+import samplerate
+import sines
+
 plt.rcParams['figure.dpi'] = 150
 plt.rcParams.update({
     "text.usetex": True,
@@ -22,63 +20,20 @@ plt.rcParams.update({
     "axes.labelsize": "medium",
 })
 
-#* Make a class / module to process the bss eval measures.
-
-
-
-def make_scale_invariant(estimates,targets):
-    k = targets.shape[1]
-    estimates = estimates[:,:k]
-    Rss = (targets * targets).sum(-1)
-    alpha = (estimates * targets).sum(-1) / Rss
-    return targets * alpha.unsqueeze(-1)
-
-
-def mp2comp(magnitude,phase):
-    Zc = magnitude*torch.exp(1j*phase)
-    Z = torch.view_as_real(Zc)
-    return Z
-
-def pad_full(Z,nfft):
-    out = torch.zeros(Z.size(0),nfft//2+1,Z.size(2),2)
-    out[:,:Z.size(1)] = Z
-    return out
-
-# Batch Synthesize
-def synthesize(magnitude,phase,istft):
-    X = mp2comp(magnitude=magnitude,phase=phase)
-    X = pad_full(X) 
-    x = istft(X)
-    return x
-
-
 #%%
+
+model_path = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC/compression/K5/230122-13058078/")
+model_filename = model_path / "svae_RWC_S2_K5_L1_pooled_D256_C5-10.pt"
+
+path_out = Path("/Users/julian/Documents/Code/Python/Results/SVAE/music")
+os.makedirs(path_out,exist_ok=True)
+
+fname = model_path / "configuration.txt"
+with open(fname) as f:
+    data = f.read()
+args = json.loads(data)
+parser.set_defaults(**args)
 args = parser.parse_args(args=[])
-torch.manual_seed(args.seed)
-np.random.seed(args.seed)
-
-# Check the parameters of the model saved in that directory.
-root = "/Users/julian/Desktop/svae-eval/svae-s5/"
-args.model_directory = root + "models"
-args.model_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/compression/K5/230122-13058078/"
-os.chdir(args.model_directory)
-model_name = glob.glob("*.pt")[0]
-print(model_name)
-match = re.match(r'svae_([^_]+)_S(\d+)_K(\d+)_L1_pooled_D(\d+)_C(\d+)-10.pt', model_name)
-
-args.num_targets = int(match.group(2))
-args.num_sources = int(match.group(3))
-args.latent_dim = int(match.group(4))
-args.compression = float(match.group(5)) * .1
-args.conv2d = True
-args.rnn_dim = 512
-
-print(args.num_targets)
-print(args.num_sources)
-print(args.latent_dim)
-print(args.compression)
-
-args.activate_final_layer = True
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -86,41 +41,7 @@ device = torch.device("cuda" if args.cuda else "cpu")
 kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if args.cuda else {}
 
 nfft = 512
-averaged = False
-dim_data = (nfft//2+1,args.duration)
-
-args.num_targets=1
-mixer = Mixer(n_sources=args.num_targets,average=averaged)
-args.n_time = 257+128
-pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
-mixer = mixer.to(device)
-pipeline = pipeline.to(device)
-
-test_set = AuditoryStreams(root="/Users/julian/Documents/Code/data/dataset_harmonic/")
-test_loader = DataLoader(dataset=test_set,batch_size=32,shuffle=False)
-
-
-#%%
-
-# filename = "trombone_violin"
-# input_file = "/Users/julian/Documents/MATLAB/sounds/{}.wav".format(filename)
-# audio,sr = torchaudio.load(input_file)
-
-
-# input_file = "/Users/julian/Documents/MATLAB/sounds/example16k_source_1.wav".format(filename)
-# audio1,sr = torchaudio.load(input_file)
-# input_file = "/Users/julian/Documents/MATLAB/sounds/example16k_source_2.wav".format(filename)
-# audio2,sr = torchaudio.load(input_file)
-# audio = torch.cat([audio1,audio2],0)
-# audio += torch.randn(audio.shape)*1e-5
-
-# audio = torchaudio.functional.resample(audio,orig_freq=sr,new_freq=16000.0,resampling_method='kaiser_window')
-# audio = samplerate.resample(audio.numpy().ravel(),16000.0/sr)
-# audio = torch.from_numpy(audio).view(1,-1)
-
-#%% LOAD MODEL
-
-dimx = dim_data[0]
+dimx = nfft//2+1
 dimz = args.latent_dim
 dimh = args.rnn_dim
 dimg = args.rnn_dim
@@ -128,7 +49,7 @@ kernel_size=(3,3)
 stride=(2,2)
 padding=(1,1)
 
-model = DCAE(
+kwds_model = dict(
         dimx=dimx,
         dimz=dimz,
         dimh=dimh,
@@ -137,172 +58,39 @@ model = DCAE(
         net_type=args.net_type,
         num_layers=args.num_layers,
         scale_invariant=True,
-        layer_channels=(32,64,128,128),
+        layer_channels=tuple(args.cnn_channels),
         kernel_size=kernel_size,stride=stride,padding=padding,
-        activate_final_layer=args.activate_final_layer
+        activate_final_layer=True
         )
+                
+model = DCAE(**kwds_model)
+model.load_state_dict(load_state_dict(path=model_filename))
 
-model.load_state_dict(load_state_dict(path=args.model_directory + "/" + model_name))
+model = Separator(model,compression=args.compression)
 model.to(device)
 model.eval()
-pipeline.compression = args.compression
 
-# with torch.no_grad():
-#     mix, sources = mixer(waveform=audio.to(device))
-#     mix_stft = pipeline.forward_complex(mix)
-#     source_stft = pipeline.forward_complex(sources)
-
-#     data = mix_stft.abs()
-#     output = model(data)
-
-#     s_hat = output['recon_s']
-#     m_hat = create_masks(data,s_hat)
-#     estimates_stft = m_hat * torch.exp(1j*mix_stft.angle().unsqueeze(1))
-
-#     mix = pipeline.invert(mix_stft)
-#     estimates = pipeline.invert(estimates_stft)
-#     sources = pipeline.invert(source_stft)
-
-#     estimates = optimal_permute(estimates,sources)
-
-
-# # %%
-# args.output_directory = root + filename
-# os.makedirs(args.output_directory,exist_ok=True)
-
-# kwds = dict(cmap='jet',origin='lower',aspect='auto',interpolation='none',vmin=-160,vmax=2)
-# pipeline.compression = 1.0
-# n = 0
-# fig,ax = plt.subplots(args.num_sources,3,figsize=(9,3*args.num_sources))
-# ax[0,0].imshow(mag2db(pipeline(mix[n])+1e-10).cpu(),**kwds)
-# for i in range(args.num_targets):
-#     ax[i,1].imshow(mag2db(pipeline(sources[n,i])+1e-9).cpu(),**kwds)
-# for i in range(args.num_sources):
-#     ax[i,2].imshow(mag2db(pipeline(estimates[n,i])+1e-9).cpu(),**kwds)
-
-# ax[0,0].set_title('Input Mixture')
-# ax[0,1].set_title('Target')
-# ax[0,2].set_title('Estimates')
-
-# for i in range(1,args.num_sources):
-#     ax[i,0].remove()
-# for i in range(args.num_targets,args.num_sources):
-#     ax[i,1].remove()
-
-# plt.tight_layout()
-# plt.savefig(args.output_directory + "/evaluation_spec.png")
-# # plt.close()
-
-# plt.savefig(args.output_directory + "/spectrograms.pdf")
-# # %%
-
-# torchaudio.save(args.output_directory + "/mix.wav",mix[n].unsqueeze(0).cpu() / 2,16000)
-# for i in range(estimates.shape[1]):
-#     torchaudio.save(args.output_directory + "/estimate_{}.wav".format(i+1),estimates[n,i].unsqueeze(0).cpu() / 2,16000)
-    
-# # %%
-# mix_down = torch.zeros((2,mix[n].shape[0]))
-# nsrc = estimates.shape[1]
-# for i in range(nsrc):
-#     panr = i/(nsrc-1.0)
-#     panl = 1-panr
-#     pan = torch.tensor([panl,panr])
-#     mix_down += estimates[n,i].view(1,-1).cpu() * pan.view(-1,1)
-
-# torchaudio.save(args.output_directory + "/mixdown_estimates.wav",mix_down.cpu() / 2,16000)
-# # %%
-
-
-
-
-#%% EVALUATE
-#TODO: SAVE INDIV. SOURCE FILES.
-torch.manual_seed(args.seed)
-np.random.seed(args.seed)
-SiSDR = []
-SiSIR = []
-SiSAR = []
-Idx = []
-d_semitone = []
-d_time = []
-
-starting_index = 0
-
-spectral_averages = 0.0
-
+#%%
+filename = "trombone_violin"
+audio,sr = torchaudio.load("/Users/julian/Documents/MATLAB/sounds/{}.wav".format(filename))
+input = audio[[0]]
+input = torchaudio.functional.resample(input,sr,16000)
+sr = 16000
 
 with torch.no_grad():
-    for batch_idx, batch in enumerate(test_loader):
-        # mix, sources = mixer(data.to(device))
-        mix = batch['mix'][:,0]
-        sources = batch['stems']
-        # mix = F.pad(input=mix,pad=(512,512))
-        # sources = F.pad(input=sources,pad=(512,512))
+    estimates = model(input)
 
-        mix_stft = pipeline.forward_complex(mix)
-        source_stft = pipeline.forward_complex(sources)
-
-        data = mix_stft.abs()
-        if args.complex_version:
-            input_data = torch.stack([mix_stft.real, mix_stft.imag],1)
-        else:
-            input_data = data
-        output = model(input_data)
-
-        s_hat = output['recon_s']
-        m_hat = create_masks(data,s_hat)
-        estimates_stft = m_hat * torch.exp(1j*mix_stft.angle().unsqueeze(1))
-
-        mix = pipeline.invert(mix_stft)
-        sources = pipeline.invert(source_stft)
-        estimates = pipeline.invert(estimates_stft)
-
-        estimates = optimal_permute(estimates,sources)
-        sources_invariant = make_scale_invariant(estimates=estimates,targets=sources)
-
-        SDR, SIR, SAR = compute_measures_batch(estimates=estimates,targets=sources_invariant)
-
-        _,idx = torch.sort(SDR)
-        
-        SiSDR.append(SDR)
-        SiSIR.append(SIR)
-        SiSAR.append(SAR)
-        Idx.append(idx)
-        d_time.append(batch['delta_time'])
-        d_semitone.append(batch['delta_semitone'])
-
-        spectral_averages += s_hat.sum(-1).mean(0)
-
-        print("Evaluating {} / {} ==> ".format(batch_idx+1,len(test_loader)))
-
-        # if save_audio_files:
-        #     starting_index = save_audio_batch(path=output_audio_path,estimates=estimates,sources=sources,mix=mix,starting_index=starting_index)
-
-spectral_averages = spectral_averages.cpu().numpy()
-spectral_averages /= len(test_loader)
-#%%
-SI_SDR = torch.cat(SiSDR).cpu()
-SI_SIR = torch.cat(SiSIR).cpu()
-SI_SAR = torch.cat(SiSAR).cpu()
-Index = torch.cat(Idx).cpu()
-D_Time = torch.cat(d_time).cpu()
-D_Semi = torch.cat(d_semitone).cpu()
-
-print("SI-SDR = {:4.2f}".format(SI_SDR.mean()))
-print("SIR = {:4.2f}".format(SI_SIR.mean()))
-print("SAR = {:4.2f}".format(SI_SAR.mean()))
+# %%
+spec = Spectrogram(n_fft=512,hop_length=64,power=1,normalized=True)
+S = spec(estimates).abs().log10()*20
 
 #%%
-temp = SI_SDR.mean(-1)
-Temp = temp.reshape(-1,32)
-# plt.scatter(delta_T,delta_semitone,c=temp)
-
-plt.figure(figsize=(3.5,2.5))
-plt.imshow(Temp,aspect='auto',origin='lower',extent=[D_Time.min(),D_Time.max(),D_Semi.min(),D_Semi.max()],cmap='Greys',interpolation='none')
-cbar = plt.colorbar()
-cbar.ax.set_ylabel("SI-SDR")
-plt.xlabel(r"$\Delta$ t(s)")
-plt.ylabel(r"$\Delta$  semitone")
-
-# plt.scatter(D_Time,D_Semi,c=temp)
+to_plot = [0,3,4]
+to_plot = np.arange(5)
+fig,ax = plt.subplots(len(to_plot),figsize=(4,4),sharex=True)
+ax = ax.ravel()
+for i,k in enumerate(to_plot):
+    ax[i].imshow(S[0,k],**sines.plot_spectrogram_kwds(),cmap='jet',vmin=-150,vmax=0)
+    sf.write(file=path_out/ "{}_{}.wav".format(filename,i+1),data=estimates[0,k],samplerate=sr)
+plt.tight_layout()
 # %%

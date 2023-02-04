@@ -12,6 +12,7 @@ from pathlib import Path
 from torchaudio.transforms import GriffinLim
 
 import matplotlib.pyplot as plt
+
 plt.rcParams['figure.dpi'] = 150
 plt.rcParams.update({
     "text.usetex": True,
@@ -26,9 +27,10 @@ L = int(T*sr)
 audio = torch.zeros(1,L)
 audio[:,sr::sr//2] = 1
 dataset = AuditoryStreams(root="/Users/julian/Documents/Code/data/dataset_harmonic/")
-data = dataset.__getitem__(30*42+3)
+idx = dataset._info[(dataset._info['physics1']=='forced') & (dataset._info['physics2']=='forced_vibrato') & (dataset._info['delta_time']==.755) & (dataset._info['delta_semitone']==9)].index.item()
+data = dataset.__getitem__(idx)
+
 audio,sources_true = data['mix'], data['stems']
-audio = audio[:,sr//2:]
 T = audio.shape[-1]/sr
 
 audio += torch.randn(audio.shape)*1e-5
@@ -45,25 +47,30 @@ model.load_state_dict(load_state_dict(path=path))
 model.eval()
 
 with torch.no_grad():
+    features = model.Encoder(x=x.unsqueeze(1))
     features_encoded = model.feature_encoder(x)
     output_stoch = model.forward(x,stochastic=True)
     x_hat = output_stoch['recon_x'].log()
     s_hat = output_stoch['recon_s'].log()
+    z_for_decoder = output_stoch['z'].transpose(-2,-1)
     z_hat = output_stoch['z'].abs()
+
 
     output_deter = model.forward(x,stochastic=False)
     s_deter = output_deter['recon_s'].log()
+    z_from_encoder = output_deter['z'].transpose(-2,-1)
     z_deter = output_deter['z'].abs()
 
     samp_s,samp_z,samp_h = model.sample(N=z_hat.shape[1],M=2)
 
 #%%
-kwds = dict(aspect='auto',origin='lower',interpolation='none',cmap='Greys')
+kwds = dict(aspect='auto',origin='lower',interpolation='none',cmap='jet')
 kwds_subplots = dict(nrows=1,ncols=5,sharey=True,figsize=(6,2))
-plt.figure(figsize=(2.5,2))
+plt.figure(figsize=(2,2))
 plt.imshow(x[0].log(),**kwds,vmin=-8,extent=[0,T,0,sr//2/1e3]);
 plt.xlabel('time (s)')
 plt.ylabel('frequency (kHz)')
+plt.xlim(0)
 plt.tight_layout()
 plt.savefig(output_img_path/'stft_mix.pdf')
 
@@ -106,20 +113,21 @@ plt.savefig(output_img_path/'stft_sources_mu.pdf')
 
 
 # %%
-torch.manual_seed(1)
+torch.manual_seed(2)
 with torch.no_grad():
-    M = 1
-    samp_s,samp_z,samp_h = model.sample(N=z_hat.shape[-2],M=M)
-fig,ax = plt.subplots(M,5,figsize=(6,2*M),sharex=True,sharey=True)
-ax = np.atleast_2d(ax)
+    M = 2
+    samp_s,samp_z,samp_h = model.sample(N=40,M=M)
+
 vmax = samp_s.log().max()
 for j in range(M):
+    fig,ax = plt.subplots(1,5,figsize=(8,2),sharex=True,sharey=True)
+    ax = np.atleast_2d(ax)
     for i in range(5):
-        ax[j,i].imshow(samp_s[j,i].log(),**kwds,vmin=-10,vmax=vmax,extent=[0,samp_s.shape[-1]*128/sr,0,sr//2/1e3])
-        ax[j,0].set_ylabel('frequency (kHz)')
-        ax[-1,i].set_xlabel('time (s)')
-plt.tight_layout()
-plt.savefig(output_img_path/'stft_sources_sampled.pdf')
+        ax[0,i].imshow(samp_s[j,i].log(),**kwds,vmin=-10,vmax=vmax,extent=[0,samp_s.shape[-1]*128/sr,0,sr//2/1e3])
+        ax[0,0].set_ylabel('frequency (kHz)')
+        ax[0,i].set_xlabel('time (s)')
+    plt.tight_layout()
+    plt.savefig(output_img_path/'stft_sources_sampled_{}.pdf'.format(j+1))
 # %%
 # samp_source = pipeline.inverse_stft(samp_s.exp() * torch.exp(0*1j*torch.randn(samp_s.shape)))
 gl = GriffinLim(n_fft=512,n_iter=100,win_length=512,hop_length=128,power=1)
@@ -133,4 +141,133 @@ samp_source = samp_source.view(-1,samp_source.shape[-1])
 #%%
 for j in range(5):
     torchaudio.save(output_img_path / "samped_{}.wav".format(j),samp_source[[j]],16000)
+# %%
+
+Features = []
+f = x.unsqueeze(1)
+for i,m in enumerate(model.Encoder.Network):
+    f = m(f)
+    temp = f.clone().detach()[0]
+    temp -= temp.min()
+    temp /= temp.max()
+    # temp_sum = temp.abs().sum(-1).sum(-1)
+    # idx = torch.argsort(temp_sum,descending=True)
+    # temp = temp[idx]
+    Features.append(temp)
+
+
+#%%
+for ii,f in enumerate(Features):
+    fig,ax = plt.subplots(4,3,sharex=True,sharey=True,figsize=(3,2.8))
+    
+    ax = ax.ravel()
+    
+    ax[0].set_xticks([])
+    ax[0].set_yticks([])
+    plt.tight_layout()
+    plt.subplots_adjust(wspace=0.05,hspace=0.05)
+
+    for i in range(12):
+        ax[i].axis('off')
+        ax[i].imshow(f[i],interpolation="none",origin='lower',aspect='equal',cmap='Greys')
+    
+    plt.savefig(output_img_path/'features_{}.png'.format(ii+1))
+# %%
+
+fig,ax = plt.subplots(1,1,sharex=True,sharey=True,figsize=(1.3,1))
+ax = np.atleast_2d(ax)
+ax = ax.ravel()
+ax[0].set_xticks([])
+ax[0].set_yticks([])
+plt.tight_layout()
+plt.subplots_adjust(wspace=0.05,hspace=0.05)
+# ax[0].axis('off')
+# ax[0].set_title(r"$y$")
+ax[0].set_xlabel(r"$t$")
+ax[0].imshow(x[0],interpolation="none",origin='lower',aspect='equal',cmap='Greys')
+
+plt.savefig(output_img_path/'features_{}.png'.format(0))
+# %%
+
+
+z = model.fc_decoder(z_for_decoder)
+z = z.view(z.shape[0],model.conv_channels,-1,z.shape[-1])
+
+n = 1
+Features_dec = []
+f = z
+temp = f.clone().detach()[n]
+temp -= temp.min()
+temp /= temp.max()
+Features_dec.append(temp)
+for i,m in enumerate(model.Decoder.Network):
+    f = m(f)
+    temp = f.clone().detach()[n]
+    temp -= temp.min()
+    temp /= temp.max()
+    # temp_sum = temp.abs().sum(-1).sum(-1)
+    # idx = torch.argsort(temp_sum,descending=True)
+    # temp = temp[idx]
+    Features_dec.append(temp)
+
+
+#%%
+for ii,f in enumerate(Features_dec[:-1]):
+    fig,ax = plt.subplots(4,3,sharex=True,sharey=True,figsize=(3,2.8))
+    
+    ax = ax.ravel()
+    
+    ax[0].set_xticks([])
+    ax[0].set_yticks([])
+    plt.tight_layout()
+    plt.subplots_adjust(wspace=0.05,hspace=0.05)
+
+    for i in range(12):
+        ax[i].axis('off')
+        ax[i].imshow(f[i],interpolation="none",origin='lower',aspect='equal',cmap='Greys')
+    
+    plt.savefig(output_img_path/'features_dec_{}.png'.format(ii+1))
+# %%
+fig,ax = plt.subplots(1,1,sharex=True,sharey=True,figsize=(1.33,1))
+ax = np.atleast_2d(ax)
+ax = ax.ravel()
+ax[0].set_xticks([])
+ax[0].set_yticks([])
+plt.tight_layout()
+plt.subplots_adjust(wspace=0.05,hspace=0.05)
+# ax[0].axis('off')
+ax[0].set_xlabel(r"$t$")
+# ax[0].set_title(r"$y$")
+ax[0].imshow(Features_dec[-1][0],interpolation="none",origin='lower',aspect='equal',cmap='Greys')
+
+plt.savefig(output_img_path/'features_dec_{}.png'.format(6))
+# %%
+
+fig,ax = plt.subplots(1,1,sharex=True,sharey=True,figsize=(1.33,1))
+ax = np.atleast_2d(ax)
+ax = ax.ravel()
+ax[0].set_xticks([])
+ax[0].set_yticks([])
+plt.tight_layout()
+plt.subplots_adjust(wspace=0.05,hspace=0.05)
+# ax[0].axis('off')
+ax[0].imshow(z_for_decoder[n].abs(),interpolation="none",origin='lower',aspect='auto',cmap='Greys')
+ax[0].set_xlabel(r"$\tau$")
+# ax[0].set_title(r"$x$")
+plt.savefig(output_img_path/'features_dec_z.png')
+# %%
+
+fig,ax = plt.subplots(2,1,sharex=True,sharey=True,figsize=(1.33,1.5))
+ax = np.atleast_2d(ax)
+ax = ax.ravel()
+ax[0].set_xticks([])
+ax[0].set_yticks([])
+plt.tight_layout()
+plt.subplots_adjust(wspace=0.05,hspace=0.05)
+# ax[0].axis('off')
+ax[0].imshow(z_from_encoder[1].abs(),interpolation="none",origin='lower',aspect='auto',cmap='Greys')
+ax[1].imshow(z_from_encoder[4].abs(),interpolation="none",origin='lower',aspect='auto',cmap='Greys')
+ax[1].set_xlabel(r"$\tau$")
+# ax[0].set_title(r"$x$")
+plt.savefig(output_img_path/'features_enc_z.png')
 # %%
