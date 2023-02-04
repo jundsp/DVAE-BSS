@@ -41,6 +41,7 @@ def get_datasets(dataset,path,args):
         test_set = Audioset(path + '/MUMS', path_csv='test.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
                 
     if dataset == 'RWC':
+        print(path)
         train_set = Audioset(root=path + '/RWC_dataset',path_csv='train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
         test_set =  Audioset(root=path + '/RWC_dataset',path_csv='validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
 
@@ -106,8 +107,9 @@ class Audioset(Dataset):
             walker = walk_files(self._path, suffix=suffix, prefix=True)
             self._walker = list(walker)
         else:
-            print(os.path.join(root,path_csv))
-            self._walker = pd.read_csv(os.path.join(root,path_csv))['path'].tolist()
+            csv_path = os.path.join(root,path_csv)
+            # self._walker = pd.read_csv(csv_path)['path'].tolist()
+            self._walker = pd.read_csv(csv_path,header=None,sep='\t')[0].tolist()
            
 
         self.n_files = len(self._walker)

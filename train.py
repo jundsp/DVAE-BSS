@@ -206,6 +206,8 @@ if __name__ == "__main__":
     
     kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if args.cuda else {}
 
+    print(args.data_directory)
+
     train_set, test_set = get_datasets(dataset=args.dataset,path=args.data_directory,args=args)
 
     # pipeline = ImagePipeline(n_src=args.num_sources,duration=args.duration,shift=.1)
