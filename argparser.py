@@ -64,3 +64,4 @@ parser.add_argument('--activate-final-layer', action='store_true', default=False
 parser.add_argument('--complex-version',action='store_true',default=False)
 parser.add_argument('--separator-version',action='store_true',default=False)
 parser.add_argument('--laplace',action='store_true',default=False)
+parser.add_argument('--separator-layers',type=int,default=4)

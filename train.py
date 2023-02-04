@@ -248,7 +248,7 @@ if __name__ == "__main__":
     dimz = args.latent_dim
     dimh = args.rnn_dim
     dimg = args.rnn_dim
-    lr = 1e-4
+    lr = 1e-4 * args.world_size
 
     with open(path_saves+'/configuration.txt', 'w') as f:
         json.dump(args.__dict__, f, indent=2)
@@ -276,7 +276,7 @@ if __name__ == "__main__":
             if args.separator_version:
                 kernel_size=(3,3)
                 stride=(2,1)
-                padding=(1,0)
+                padding=(1,1)
             else:
                 kernel_size=(3,3)
                 stride=(2,2)
