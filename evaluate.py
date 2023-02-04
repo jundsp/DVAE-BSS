@@ -348,8 +348,6 @@ if __name__ == "__main__":
         nsrc = estimates.shape[1]
         pans  = panning(nsrc)
 
-        print(pans)
-
         for i in range(nsrc):
             panr = i/(nsrc-1.0)
             panr = pans[i]
@@ -358,7 +356,6 @@ if __name__ == "__main__":
             mix_down += estimates[n,i].view(1,-1).cpu() * pan.view(-1,1)
 
         torchaudio.save(output_audio_path_n + "/mixdown_estimates.wav",mix_down.cpu() / 2,16000)
-
 
     np.save(file=output_path + "/spectral_averages",arr=spectral_averages)
 
