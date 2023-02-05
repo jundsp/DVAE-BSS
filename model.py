@@ -167,7 +167,10 @@ class DSAE(nn.Module):
         prior_logvar = self.batch_and_source(self.slogvar0,M).to(device)
         z_t = torch.randn(MK,1,self.dimz).to(device)*torch.exp(0.5*prior_logvar) + prior_mean
         for n in range(N):
-            _,(h_t,c_t) = self.gru_generate(z_t,(h_t,c_t))
+            if self.rnn_type == 'gru':
+                _,h_t = self.gru_generate(z_t,h_t)
+            else:
+                _,(h_t,c_t) = self.gru_generate(z_t,(h_t,c_t))
             zh = self.combiner(z_t,h_t[-1].unsqueeze(1))
             mu, logvar = self.prior_stats(zh)
             z_t = reparameterize(mu,logvar)
@@ -248,14 +251,16 @@ class DCAE(DSAE):
         self.dimx, self.dimz, self.dimh, self.dimg = dimx, dimz, dimh, dimg
         self.num_sources = num_sources
         self.num_layers = num_layers
+        
 
-        # self.rnn_type = rnn_type
-        # if rnn_type == 'gru':  
-        #     self.gru_generate = nn.LSTM(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
-        #     self.gru_infer = nn.LSTM(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
-        # else:
-        #     self.gru_generate = nn.GRU(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
-        #     self.gru_infer = nn.GRU(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
+        self.rnn_type = rnn_type
+        if rnn_type == 'gru':  
+            self.gru_generate = nn.GRU(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
+            self.gru_infer = nn.GRU(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
+        else:
+            self.gru_generate = nn.LSTM(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
+            self.gru_infer = nn.LSTM(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
+        
         
         self.make_transition_nets(dimg,chans,dimz,dimh)
         self.fc_encoder = nn.Sequential(
@@ -932,10 +937,10 @@ if __name__ == "__main__":
     print(receptive_field([3]*4 + list(field),[1]*4+[1]*len(field)))
 
     T = 16000*2
-    input = torch.randn(16,T)
+    input = torch.randn(2,T)
     input*= 0
     input[:,T//2] = 1
-    model = DSVAE(num_sources=5,dimx=257,dimz=32,kernel_size=(3,3),stride=(2,1),padding=(1,2),dilation=(1,1),layer_channels=(32,64,64,64),activate_final_layer=True,separator_kernel_size=2,separator_layers=4,separator_dilation=1)
+    model = DSVAE(num_sources=5,dimx=257,dimz=32,dimh=256,dimg=256,chans=128,kernel_size=(3,2),stride=(2,1),padding=(1,0),dilation=(1,1),layer_channels=(32,64,64,64),activate_final_layer=True,separator_kernel_size=2,separator_layers=4,separator_dilation=1,rnn_type='gru')
 
     separator = Separator(model=model,compression=.5)
     with torch.no_grad():
