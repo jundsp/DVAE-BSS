@@ -33,6 +33,8 @@ parser.add_argument('--latent-dim', type=int, default=32, metavar='fname',
                     help='dimension of latent sources')
 parser.add_argument('--rnn-dim', type=int, default=128, metavar='fname',
                     help='dimension of rnn')
+parser.add_argument('--rnn-type', type=str, default='lstm', metavar='fname',
+                    help='kind of rnn')
 parser.add_argument('--duration', type=float, default=8, metavar='fname',
                     help='duration in seconds')
 parser.add_argument('--n-time', type=int, default=513, metavar='N',
