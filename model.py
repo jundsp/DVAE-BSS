@@ -963,7 +963,7 @@ if __name__ == "__main__":
     print(receptive_field(field,field*0+1))
 
     print(receptive_field([3]*4 + list(field),[1]*4+[1]*len(field)))
-
+     
     T = 8000
     input = torch.randn(2,T)
     input*= 0
