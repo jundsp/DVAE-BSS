@@ -59,10 +59,11 @@ kwds_model = dict(
     layer_channels=tuple(args.cnn_channels),
     kernel_size=kernel_size,stride=stride,padding=padding,
     variance=args.variance,
-    activate_final_layer=args.activate_final_layer
+    activate_final_layer=args.activate_final_layer,
+    rnn_type='gru'
     )
     
-model = DSVAE(separator_channels=16,separator_kernel_size=2,separator_layers=5,**kwds_model)
+model = DSVAE(separator_channels=16,separator_kernel_size=3,separator_layers=1,**kwds_model)
 # model = DCAE(**kwds_model)
 
 model.to(device)
