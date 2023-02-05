@@ -302,7 +302,7 @@ if __name__ == "__main__":
             if args.complex_version:
                 model = SVAE(mag_output=False,**kwds_model)
             elif args.separator_version:
-                model = DSVAE(separator_layers=args.separator_layers,separator_kernel_size=2,**kwds_model)
+                model = DSVAE(separator_layers=args.separator_layers,separator_kernel_size=args.separator_kernel_size,**kwds_model)
             else:
                 model = DCAE(**kwds_model)
         else:
