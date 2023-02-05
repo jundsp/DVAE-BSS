@@ -242,7 +242,7 @@ class DCAE(DSAE):
         self.conv_channels = layer_channels[-1]
 
         n_feature_layers = len(layer_channels)
-        self.freq_features = dimx // (2**(n_feature_layers+1)) + (dimx % 2) 
+        self.freq_features = dimx // (2**(n_feature_layers)) + (dimx % 2) 
         self.encoded_features = self.freq_features * self.conv_channels
         self.n_feat_encoded = dimg * num_sources
 
@@ -469,7 +469,7 @@ class StridedDecoder(nn.Module):
 
         mlist = nn.ModuleList()
         mlist.append(ConvTranspose2dLayer(input_channels,layer_channels[-1],**kwds))
-        for ii in range(len(layer_channels)-2,-1,-1):
+        for ii in range(len(layer_channels)-3,-1,-1):
             mlist.append(ConvTranspose2dLayer(layer_channels[ii+1],layer_channels[ii],**kwds))
 
         mlist.append(ConvTranspose2dLayer(layer_channels[0],output_channels,activation=activate_final_layer,batchnorm=False,**kwds))
@@ -903,7 +903,7 @@ class TConvSeparator(nn.Module):
             dilations = 2**np.arange(layers)
             fields = (kernel_size-1)*dilations+1
             paddings = fields//2
-            mlist.append(Conv1dLayer(input_channels,layer_channels,kernel_size=kernel_size,stride=stride,padding='same',dilation=dilations[0]))
+            mlist.append(Conv1dLayer(input_channels,layer_channels,kernel_size=kernel_size,stride=stride,padding=paddings[0],dilation=dilations[0]))
             for ii in range(1,layers-1):
                 mlist.append(Conv1dLayer(layer_channels,layer_channels,kernel_size=kernel_size,stride=stride,padding=paddings[ii],dilation=dilations[ii]))
             mlist.append(Conv1dLayer(layer_channels,output_channels,batchnorm=False,kernel_size=kernel_size,stride=stride,padding=paddings[-1],dilation=dilations[-1]))
@@ -913,11 +913,39 @@ class TConvSeparator(nn.Module):
     def forward(self, x):
         return self.Network(x)
 
+class StridedDilatedEncoder(nn.Module):
+    def __init__(self,input_channels,output_channels,kernel_size=(3,3),stride=(2,1),padding=(1,1),dilation=(1,1),layer_channels=None):
+        super(StridedDilatedEncoder, self).__init__()
+        if layer_channels is None: 
+            layer_channels = (32,64,128)
+
+        layers = len(layer_channels)
+        dilations = 2**np.arange(layers)
+        fields = (kernel_size[-1]-1)*dilations+1
+        padding_1 = padding[0]
+        padding_2 = fields//2
+        padding = [(padding_1,k) for k in padding_2]
+        dilation = [(1,k) for k in dilations]
+
+        mlist = nn.ModuleList()
+        mlist.append(Conv2dLayer(input_channels,layer_channels[0],kernel_size=kernel_size,stride=stride,padding=padding[0],dilation=dilation[0]))
+        for ii in range(1,len(layer_channels)-1):
+            mlist.append(Conv2dLayer(layer_channels[ii-1],layer_channels[ii],kernel_size=kernel_size,stride=stride,padding=padding[ii],dilation=dilation[ii]))
+        mlist.append(Conv2dLayer(layer_channels[-1],output_channels,batchnorm=True,kernel_size=kernel_size,stride=stride,padding=padding[-1],dilation=dilation[-1]))
+
+        self.Network = nn.Sequential(*mlist)
+
+    def forward(self, x):
+        return self.Network(x)
+    
 class DSVAE(DCAE):
     def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='strided', num_layers=1, scale_invariant=False, layer_channels=None, kernel_size=(3, 2), stride=(2, 1), padding=(1, 0), dilation=(1, 1), variance=0.1, activate_final_layer=True, separator_kernel_size=1,separator_layers=1,separator_dilation=1,separator_channels=32,rnn_type='gru'):
         super().__init__(dimx, dimz, dimh, dimg, chans, num_sources, net_type, num_layers, scale_invariant, layer_channels, kernel_size, stride, padding, dilation, variance, activate_final_layer, separator_kernel_size,rnn_type=rnn_type)
 
-        self.fc_encoder = TConvSeparator(input_channels=self.encoded_features,output_channels=self.dimg*self.num_sources,kernel_size=separator_kernel_size,stride=1,padding=0,dilation=1,layers=separator_layers,layer_channels=separator_channels)
+        self.fc_encoder = TConvSeparator(input_channels=self.encoded_features,output_channels=self.dimg*self.num_sources,kernel_size=separator_kernel_size,stride=1,padding=1,dilation=1,layers=separator_layers,layer_channels=separator_channels)
+
+        kwds_feature_conv = dict(kernel_size=kernel_size,stride=stride,padding=padding,dilation=dilation)
+        self.Encoder = StridedDilatedEncoder(1,self.conv_channels,layer_channels=layer_channels,**kwds_feature_conv)
 
 
 
@@ -928,7 +956,7 @@ if __name__ == "__main__":
 
     layers = 6
     dilation = 2**np.arange(layers)
-    kernel_size = 2
+    kernel_size = 3
 
     field = (kernel_size-1)*dilation+1
 
@@ -936,11 +964,11 @@ if __name__ == "__main__":
 
     print(receptive_field([3]*4 + list(field),[1]*4+[1]*len(field)))
 
-    T = 16000*2
+    T = 8000
     input = torch.randn(2,T)
     input*= 0
     input[:,T//2] = 1
-    model = DSVAE(num_sources=5,dimx=257,dimz=16,dimh=256,dimg=256,chans=64,kernel_size=(3,2),stride=(2,1),padding=(1,0),dilation=(1,1),layer_channels=(32,64,64,64),activate_final_layer=True,separator_kernel_size=2,separator_layers=5,separator_dilation=1,rnn_type='gru')
+    model = DSVAE(num_sources=2,dimx=257,dimz=16,dimh=256,dimg=256,chans=64,kernel_size=(3,3),stride=(2,1),padding=(1,1),dilation=(1,1),layer_channels=(32,64,64,64,64),activate_final_layer=True,separator_kernel_size=kernel_size,separator_layers=1,separator_dilation=1,rnn_type='gru')
 
     separator = Separator(model=model,compression=.5)
     with torch.no_grad():
