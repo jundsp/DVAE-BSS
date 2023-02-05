@@ -275,9 +275,9 @@ if __name__ == "__main__":
     else:
         if args.conv2d:
             if args.separator_version:
-                kernel_size=(3,2)
+                kernel_size=(3,3)
                 stride=(2,1)
-                padding=(1,0)
+                padding=(1,1)
             else:
                 kernel_size=(3,3)
                 stride=(2,2)
