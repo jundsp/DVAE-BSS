@@ -926,7 +926,7 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from utils.utils import receptive_field
 
-    layers = 5
+    layers = 6
     dilation = 2**np.arange(layers)
     kernel_size = 2
 
@@ -940,7 +940,7 @@ if __name__ == "__main__":
     input = torch.randn(2,T)
     input*= 0
     input[:,T//2] = 1
-    model = DSVAE(num_sources=5,dimx=257,dimz=32,dimh=256,dimg=256,chans=128,kernel_size=(3,2),stride=(2,1),padding=(1,0),dilation=(1,1),layer_channels=(32,64,64,64),activate_final_layer=True,separator_kernel_size=2,separator_layers=4,separator_dilation=1,rnn_type='gru')
+    model = DSVAE(num_sources=5,dimx=257,dimz=16,dimh=256,dimg=256,chans=64,kernel_size=(3,2),stride=(2,1),padding=(1,0),dilation=(1,1),layer_channels=(32,64,64,64),activate_final_layer=True,separator_kernel_size=2,separator_layers=5,separator_dilation=1,rnn_type='gru')
 
     separator = Separator(model=model,compression=.5)
     with torch.no_grad():

@@ -295,7 +295,8 @@ if __name__ == "__main__":
                 layer_channels=tuple(args.cnn_channels),
                 kernel_size=kernel_size,stride=stride,padding=padding,
                 variance=args.variance,
-                activate_final_layer=args.activate_final_layer
+                activate_final_layer=args.activate_final_layer,
+                rnn_type=args.rnn_type,
                 )
                 
             if args.complex_version:
