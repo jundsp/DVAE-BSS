@@ -10,15 +10,20 @@ from torch.nn import functional as F
 import torchaudio
 
 class DSAE(nn.Module):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None, averaged_loss=True):
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None, averaged_loss=True,rnn_type='lstm'):
         super(DSAE, self).__init__()
         self.dimx, self.dimz, self.dimh, self.dimg = dimx, dimz, dimh, dimg
         self.num_sources = num_sources
         self.num_layers = num_layers
         self.averaged_loss = averaged_loss
         
-        self.gru_generate = nn.LSTM(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
-        self.gru_infer = nn.LSTM(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
+        self.rnn_type = rnn_type
+        if rnn_type == 'gru':  
+            self.gru_generate = nn.GRU(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
+            self.gru_infer = nn.GRU(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
+        else:
+            self.gru_generate = nn.LSTM(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
+            self.gru_infer = nn.LSTM(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
 
         self.make_transition_nets(dimg,chans,dimz,dimh)
 
@@ -97,8 +102,11 @@ class DSAE(nn.Module):
     def encode(self,x):
         gx = self.feature_encoder(x)
         g0 = torch.zeros(2*self.num_layers,gx.size(0),self.dimg,device=x.device)
-        c0 = torch.zeros(2*self.num_layers,gx.size(0),self.dimg,device=x.device)
-        g,_ = self.gru_infer(gx,(g0,c0))
+        if self.rnn_type == 'gru':
+            g,_ = self.gru_infer(gx,g0)
+        else:
+            c0 = torch.zeros(2*self.num_layers,gx.size(0),self.dimg,device=x.device)
+            g,_ = self.gru_infer(gx,(g0,c0))
         g = 1/2*(g[:,:,:self.dimg] + g[:,:,self.dimg:])
         mu = self.mu_q(g)
         logvar = self.logvar_q(g)
@@ -136,10 +144,15 @@ class DSAE(nn.Module):
         return mu, logvar
 
     def prior(self,z,z0):
-        h0 = torch.zeros(self.num_layers,z.size(0),self.dimh,device=z.device)
-        c0 = torch.zeros(self.num_layers,z.size(0),self.dimh,device=z.device)
         zt = torch.cat([z0,z[:,:-1]],1)
-        h,_ = self.gru_generate(zt,(h0,c0))
+
+        h0 = torch.zeros(self.num_layers,z.size(0),self.dimh,device=z.device)
+        if self.rnn_type == 'gru':
+            h,_ = self.gru_generate(zt,h0)
+        else:
+            c0 = torch.zeros(self.num_layers,z.size(0),self.dimh,device=z.device)
+            h,_ = self.gru_generate(zt,(h0,c0))
+        
         zh = self.combiner(zt,h)
         mu,logvar = self.prior_stats(zh)
         return mu, logvar
@@ -217,8 +230,8 @@ class DSAE(nn.Module):
 
 
 class DCAE(DSAE):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None,kernel_size=(3,2),stride=(2,1),padding=(1,0),dilation=(1,1),variance=.1,activate_final_layer=True,kernel_size_separator=1):
-        super(DCAE, self).__init__(dimx=dimx,dimz=dimz)
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None,kernel_size=(3,2),stride=(2,1),padding=(1,0),dilation=(1,1),variance=.1,activate_final_layer=True,kernel_size_separator=1,rnn_type='lstm'):
+        super(DCAE, self).__init__(dimx=dimx,dimz=dimz,rnn_type=rnn_type)
 
         if layer_channels is None:
             layer_channels = (64,128)
@@ -235,12 +248,15 @@ class DCAE(DSAE):
         self.dimx, self.dimz, self.dimh, self.dimg = dimx, dimz, dimh, dimg
         self.num_sources = num_sources
         self.num_layers = num_layers
-        
-        self.gru_generate = nn.LSTM(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
-        self.gru_infer = nn.LSTM(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
-        
-        # self.gru_feature = nn.LSTM(self.n_feat_encoded,self.n_feat_encoded,num_layers=self.num_layers,bidirectional=False,batch_first=True)
 
+        # self.rnn_type = rnn_type
+        # if rnn_type == 'gru':  
+        #     self.gru_generate = nn.LSTM(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
+        #     self.gru_infer = nn.LSTM(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
+        # else:
+        #     self.gru_generate = nn.GRU(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
+        #     self.gru_infer = nn.GRU(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
+        
         self.make_transition_nets(dimg,chans,dimz,dimh)
         self.fc_encoder = nn.Sequential(
             nn.Conv1d(self.encoded_features,self.dimg*self.num_sources,kernel_size=kernel_size_separator,stride=1,padding=kernel_size_separator//2),
@@ -893,10 +909,8 @@ class TConvSeparator(nn.Module):
         return self.Network(x)
 
 class DSVAE(DCAE):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='strided', num_layers=1, scale_invariant=False, layer_channels=None, kernel_size=(3, 2), stride=(2, 1), padding=(1, 0), dilation=(1, 1), variance=0.1, activate_final_layer=True, separator_kernel_size=1,separator_layers=1,separator_dilation=1,separator_channels=32):
-        super().__init__(dimx, dimz, dimh, dimg, chans, num_sources, net_type, num_layers, scale_invariant, layer_channels, kernel_size, stride, padding, dilation, variance, activate_final_layer, separator_kernel_size)
-
-        
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='strided', num_layers=1, scale_invariant=False, layer_channels=None, kernel_size=(3, 2), stride=(2, 1), padding=(1, 0), dilation=(1, 1), variance=0.1, activate_final_layer=True, separator_kernel_size=1,separator_layers=1,separator_dilation=1,separator_channels=32,rnn_type='gru'):
+        super().__init__(dimx, dimz, dimh, dimg, chans, num_sources, net_type, num_layers, scale_invariant, layer_channels, kernel_size, stride, padding, dilation, variance, activate_final_layer, separator_kernel_size,rnn_type=rnn_type)
 
         self.fc_encoder = TConvSeparator(input_channels=self.encoded_features,output_channels=self.dimg*self.num_sources,kernel_size=separator_kernel_size,stride=1,padding=0,dilation=1,layers=separator_layers,layer_channels=separator_channels)
 
@@ -907,7 +921,7 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from utils.utils import receptive_field
 
-    layers = 6
+    layers = 5
     dilation = 2**np.arange(layers)
     kernel_size = 2
 
