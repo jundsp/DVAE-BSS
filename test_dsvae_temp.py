@@ -27,13 +27,13 @@ dim_data = (nfft//2+1,args.n_time)
 
 args.num_sources = 1
 args.compression = .5
-args.n_time = 257
+args.n_time = 1025
 mixer = Mixer(n_sources=args.num_targets,average=args.average_mix)
 pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
 pipeline = pipeline.to(device)
 
 dimx = dim_data[0]
-args.latent_dim = 64
+args.latent_dim = 16
 args.rnn_dim = 256
 dimz = args.latent_dim
 dimh = args.rnn_dim
@@ -63,7 +63,7 @@ kwds_model = dict(
     rnn_type='gru'
     )
     
-model = DSVAE(separator_channels=16,separator_kernel_size=3,separator_layers=1,**kwds_model)
+model = DSVAE(separator_channels=16,separator_kernel_size=3,separator_layers=2,**kwds_model)
 # model = DCAE(**kwds_model)
 
 model.to(device)
