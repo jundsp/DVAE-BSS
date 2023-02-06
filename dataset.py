@@ -46,8 +46,8 @@ def get_datasets(dataset,path,args):
         test_set =  Audioset(root=path + '/RWC_dataset',path_csv='validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5)
 
     if dataset == 'VCTK':
-        train_set = Audioset(root=path + '/VCTK',path_csv='train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.1,starting=.5)
-        test_set =  Audioset(root=path + '/VCTK',path_csv='validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.1,starting=.5)
+        train_set = Audioset(root=path + '/VCTK',path_csv='train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.1,starting=1,ending=1)
+        test_set =  Audioset(root=path + '/VCTK',path_csv='validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.1,starting=1,ending=1)
 
     if dataset == 'composite':
         train_set = Audioset(root=path,path_csv='composite/train.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=.5)
@@ -91,7 +91,7 @@ def walk_files(root, suffix, prefix=False, remove_suffix=False):
                 yield fname
 
 class Audioset(Dataset):
-    def __init__(self,root,path_csv=None,duration=4,normalize=True,suffix='.wav',samplerate=16000,augment_levels=False,silence=.1,max_files=20,starting=0,remove_silence=False):
+    def __init__(self,root,path_csv=None,duration=4,normalize=True,suffix='.wav',samplerate=16000,augment_levels=False,silence=.1,max_files=20,starting=0,ending=0,remove_silence=False):
         self._path = root
         self.duration = duration
         self.normalize = normalize
@@ -101,21 +101,22 @@ class Audioset(Dataset):
         self.augment_levels = augment_levels
 
         starting = np.maximum(0.0,float(starting))
+        ending = np.maximum(0.0,float(ending))
         silence = np.maximum(0.0, float(silence))
 
         if path_csv is None:
             walker = walk_files(self._path, suffix=suffix, prefix=True)
             self._walker = list(walker)
         else:
-            csv_path = os.path.join(root,path_csv)
-            # self._walker = pd.read_csv(csv_path)['path'].tolist()
-            self._walker = pd.read_csv(csv_path,header=None,sep='\t')[0].tolist()
+            print(os.path.join(root,path_csv))
+            self._walker = pd.read_csv(os.path.join(root,path_csv),header=None,sep='\t')[0].tolist()
            
 
         self.n_files = len(self._walker)
         self.normalize = normalize
         self.silence_samples = int(silence*samplerate)+1
         self.starting_samples = int(starting*samplerate) + 1
+        self.ending_samples = int(ending*samplerate) + 1
         self.dbmin = 30
         self.max_files = max_files
         self.remove_silence = remove_silence
@@ -128,7 +129,7 @@ class Audioset(Dataset):
             waveform = waveform.mean(0)
             
         if samplerate != self.samplerate:
-            # print("resampling")
+            print("resampling")
             try:
                 waveform = torchaudio.functional.resample(waveform,orig_freq=samplerate,new_freq=self.samplerate)
             except:
@@ -160,8 +161,14 @@ class Audioset(Dataset):
             if (N+L) >= self.samples:
                 N = self.samples - L
             starting = np.random.randint(self.starting_samples)
-            if starting + N > len(waveform):
-                starting = len(waveform) - N
+            ending = np.random.randint(self.ending_samples)
+
+            if starting > N//2:
+                starting = N//2
+            N -= starting
+            if ending > N//2:
+                ending = N//2
+            N -= ending
 
             output[L:L+N] = waveform[starting:starting+N]
             L += N

@@ -990,20 +990,20 @@ if __name__ == "__main__":
     # net = TConvSeparator(input_channels=320,output_channels=128,kernel_size=2,stride=1,padding=0,dilation=1,layers=3)
     # print(net)
     
-# %%
-features_time = features.view(-1,features.shape[-1]).T
-plt.subplot(211)
-plt.imshow(data[0,0],aspect='auto')
-plt.subplot(212)
-plt.imshow(features_time.T,aspect='auto')
-# %%
-plt.plot(features_time.mean(-1))
-# %%
-temp = features_time.mean(-1)
-(temp > 0).sum()
-# %%
-temp2 = feats.transpose(-2,-1)
-temp2 = temp2.view(-1,temp2.shape[-1]).mean(0)
-plt.plot(temp2)
-print((temp2 > 0).sum())
-# %%
+    # # %%
+    # features_time = features.view(-1,features.shape[-1]).T
+    # plt.subplot(211)
+    # plt.imshow(data[0,0],aspect='auto')
+    # plt.subplot(212)
+    # plt.imshow(features_time.T,aspect='auto')
+    # # %%
+    # plt.plot(features_time.mean(-1))
+    # # %%
+    # temp = features_time.mean(-1)
+    # (temp > 0).sum()
+    # # %%
+    # temp2 = feats.transpose(-2,-1)
+    # temp2 = temp2.view(-1,temp2.shape[-1]).mean(0)
+    # plt.plot(temp2)
+    # print((temp2 > 0).sum())
+    # # %%
