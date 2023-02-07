@@ -246,6 +246,9 @@ class DCAE(DSAE):
     def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None,kernel_size=(3,2),stride=(2,1),padding=(1,0),dilation=(1,1),variance=.1,activate_final_layer=True,kernel_size_separator=1,rnn_type='lstm',inference_rnn=True):
         super(DCAE, self).__init__(dimx=dimx,dimz=dimz,rnn_type=rnn_type,inference_rnn=inference_rnn)
 
+        if inference_rnn is False:
+            dimg = dimz*2
+
         if layer_channels is None:
             layer_channels = (64,128)
 

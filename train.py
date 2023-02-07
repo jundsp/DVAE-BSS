@@ -297,7 +297,7 @@ if __name__ == "__main__":
                 variance=args.variance,
                 activate_final_layer=args.activate_final_layer,
                 rnn_type=args.rnn_type,
-                inference_rnn=args.inference_rnn
+                inference_rnn=~args.inference_rnn_off
                 )
                 
             if args.complex_version:
