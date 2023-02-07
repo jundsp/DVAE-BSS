@@ -10,6 +10,7 @@ from torchvision.utils import make_grid, save_image
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from argparser import parser
+import time
 
 import matplotlib.pyplot as plt
 
@@ -39,7 +40,7 @@ dimz = args.latent_dim
 dimh = args.rnn_dim
 dimg = args.rnn_dim
 lr = 1e-3
-args.cnn_channels = [16,16,16,16,16]
+args.cnn_channels = [32,64,64,64,64]
 
 kernel_size=(3,3)
 stride=(2,1)
@@ -60,10 +61,11 @@ kwds_model = dict(
     kernel_size=kernel_size,stride=stride,padding=padding,
     variance=args.variance,
     activate_final_layer=args.activate_final_layer,
-    rnn_type='gru'
+    rnn_type='lstm',
+    inference_rnn=False
     )
     
-model = DSVAE(separator_channels=16,separator_kernel_size=3,separator_layers=2,**kwds_model)
+model = DSVAE(separator_channels=64,separator_kernel_size=3,separator_layers=3,**kwds_model)
 # model = DCAE(**kwds_model)
 
 model.to(device)
@@ -83,7 +85,8 @@ audio = torch.cat([audio]*1,0)
 
 #%%
 model.train() 
-for epoch in range(1,100):
+st = time.time()
+for epoch in range(1,10):
     data = pipeline(audio)
     output = model(data)
 
@@ -96,7 +99,7 @@ for epoch in range(1,100):
 
     if epoch % 10 == 1:
         print("Epoch {} : Loss = {}".format(epoch,loss.item()))
-
+print(time.time()-st)
 kwds = dict(aspect='auto',origin='lower',cmap='jet',interpolation='none')
 
 #%%

@@ -22,6 +22,7 @@ def optimal_permute(y,x):
     nx = x.size(1)
     ny = y.size(1)
     out = torch.zeros_like(y)
+    perm = np.zeros((n,ny)).astype(int)
     for i in range(n):
         cost = torch.zeros(ny,nx)
         for j in range(ny):
@@ -30,12 +31,14 @@ def optimal_permute(y,x):
         _, col_ind = linear_sum_assignment(cost.detach().numpy().T)
         
         out[i,:nx] = y[i,col_ind]
+        perm[i,:nx] = col_ind
         if ny > nx:
             k = np.arange(ny)
             k_rem = np.array(list(set(k) - set(col_ind)))
             out[i,nx:] = y[i,k_rem]
+            perm[i,nx:] = k_rem
 
-    return out
+    return out, perm
 
 
 def panning(nsrc):
