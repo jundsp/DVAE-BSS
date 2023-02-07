@@ -449,8 +449,8 @@ class StridedEncoder(nn.Module):
 
         mlist = nn.ModuleList()
         mlist.append(Conv2dLayer(input_channels,layer_channels[0],**kwds))
-        for ii in range(len(layer_channels)-1):
-            mlist.append(Conv2dLayer(layer_channels[ii],layer_channels[ii+1],**kwds))
+        for ii in range(1,len(layer_channels)-1):
+            mlist.append(Conv2dLayer(layer_channels[ii-1],layer_channels[ii],**kwds))
         mlist.append(Conv2dLayer(layer_channels[-1],output_channels,batchnorm=True,**kwds))
 
         self.Network = nn.Sequential(*mlist)
