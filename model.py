@@ -982,6 +982,7 @@ if __name__ == "__main__":
         features = model.Encoder(x=data)
         print(features.shape)
         feats = model.feature_encoder(x=data)
+        output = model(data)
 
 
     # plt.plot((input[0]-output[0,0]))

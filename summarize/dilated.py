@@ -26,7 +26,7 @@ def get_model(path:Path,name:str):
 
     chans = list(args['cnn_channels'])
 
-    kwds = dict(num_sources=args['num_sources'],
+    kwds = dict(num_sources=4,
                 dimx=257,
                 dimz=args['latent_dim'],
                 dimh=args['rnn_dim'],
@@ -38,11 +38,14 @@ def get_model(path:Path,name:str):
                 activate_final_layer=True,
                 separator_layers=args['separator_layers'],
                 separator_kernel_size=args['separator_kernel_size'],
+                separator_channels=128,
+                scale_invariant=True,
+                rnn_type=args['rnn_type'],
                 )
 
     model = DSVAE(**kwds)
     model.load_state_dict(load_state_dict(path=path / name))
-    model = Separator(model,compression=args['compression'])
+    # model = Separator(model,compression=args['compression'])
     model.eval()
     return model
 
@@ -63,7 +66,7 @@ def get_dataset(path:Path,name='RWC',batch_size=2,duration=4):
         data_root = path / "MUSDB"
         path_csv = 'test.csv'
 
-    test_set = Audioset(root=data_root,path_csv=path_csv,augment_levels=False,duration=duration,silence=0,starting=0,max_files=4)
+    test_set = Audioset(root=data_root,path_csv=path_csv,augment_levels=True,duration=duration,silence=.5,starting=0,max_files=4)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size,shuffle=True)
     return test_loader
 
@@ -84,6 +87,7 @@ model = get_model(path,name)
 T = 8
 dataset = get_dataset(path=Path("/Volumes/JulianSSD/data"),duration=T,batch_size=4,name='RWC')
 mixer = Mixer(n_sources=2)
+pipeline = AudioPipeline(n_fft=512,n_time=1025,hop_length=128,compression=.5)
 
 # torch.manual_seed(7)
 with torch.no_grad():
@@ -93,7 +97,7 @@ with torch.no_grad():
 
     input = model.preprocess(y).abs()
 
-    output = model.model(input)
+    feats = model.model.feature_encoder(x=input)
     # s_hat = optimal_permute(s_hat,s)
 
 # Y = model.preprocess(y).abs()
@@ -111,4 +115,10 @@ with torch.no_grad():
 #     plot_spectrogram(S_hat[i],extent=[0,T,0,8],vmin=-60,vmax=7,ax=ax[i,1])
 # plt.tight_layout()
 
-plot_spectrogram(input[0].log(),extent=[0,T,0,8],vmin=-60,vmax=7)
+plot_spectrogram(input[0],extent=[0,T,0,8],vmin=-60,vmax=7)
+
+plot_spectrogram(output['recon_x'][0],extent=[0,T,0,8])
+
+
+plt.figure()
+plt.plot(output['mu_q'][0])
