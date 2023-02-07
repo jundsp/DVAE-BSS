@@ -75,7 +75,7 @@ def plot_spectrogram(y,ax=None,**kwds):
     ax.set_ylim(0)
 
 K = 5
-path = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC/sources/K{}/".format(K))
+path = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC/dilated/K{}/".format(K))
 name =  "svae_rwc_K{}_c5.pt".format(K)
 model = get_model(path,name)
 

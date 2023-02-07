@@ -10,7 +10,7 @@ from torch.nn import functional as F
 import torchaudio
 
 class DSAE(nn.Module):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None, averaged_loss=True,rnn_type='lstm'):
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None, averaged_loss=True,rnn_type='lstm',inference_rnn=True):
         super(DSAE, self).__init__()
         self.dimx, self.dimz, self.dimh, self.dimg = dimx, dimz, dimh, dimg
         self.num_sources = num_sources
@@ -18,12 +18,19 @@ class DSAE(nn.Module):
         self.averaged_loss = averaged_loss
         
         self.rnn_type = rnn_type
+        self.inference_rnn = inference_rnn
+
         if rnn_type == 'gru':  
             self.gru_generate = nn.GRU(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
-            self.gru_infer = nn.GRU(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
+            if inference_rnn:
+                self.gru_infer = nn.GRU(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
         else:
             self.gru_generate = nn.LSTM(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
-            self.gru_infer = nn.LSTM(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
+            if inference_rnn:
+                self.gru_infer = nn.LSTM(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
+
+        if inference_rnn is False:
+            dimg = dimz*2
 
         self.make_transition_nets(dimg,chans,dimz,dimh)
 
@@ -101,13 +108,16 @@ class DSAE(nn.Module):
 
     def encode(self,x):
         gx = self.feature_encoder(x)
-        g0 = torch.zeros(2*self.num_layers,gx.size(0),self.dimg,device=x.device)
-        if self.rnn_type == 'gru':
-            g,_ = self.gru_infer(gx,g0)
+        if self.inference_rnn:
+            g0 = torch.zeros(2*self.num_layers,gx.size(0),self.dimg,device=x.device)
+            if self.rnn_type == 'gru':
+                g,_ = self.gru_infer(gx,g0)
+            else:
+                c0 = torch.zeros(2*self.num_layers,gx.size(0),self.dimg,device=x.device)
+                g,_ = self.gru_infer(gx,(g0,c0))
+            g = 1/2*(g[:,:,:self.dimg] + g[:,:,self.dimg:])
         else:
-            c0 = torch.zeros(2*self.num_layers,gx.size(0),self.dimg,device=x.device)
-            g,_ = self.gru_infer(gx,(g0,c0))
-        g = 1/2*(g[:,:,:self.dimg] + g[:,:,self.dimg:])
+            g = gx
         mu = self.mu_q(g)
         logvar = self.logvar_q(g)
         mu0 = self.mu0_q(g[:,0].unsqueeze(1))
@@ -233,8 +243,8 @@ class DSAE(nn.Module):
 
 
 class DCAE(DSAE):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None,kernel_size=(3,2),stride=(2,1),padding=(1,0),dilation=(1,1),variance=.1,activate_final_layer=True,kernel_size_separator=1,rnn_type='lstm'):
-        super(DCAE, self).__init__(dimx=dimx,dimz=dimz,rnn_type=rnn_type)
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None,kernel_size=(3,2),stride=(2,1),padding=(1,0),dilation=(1,1),variance=.1,activate_final_layer=True,kernel_size_separator=1,rnn_type='lstm',inference_rnn=True):
+        super(DCAE, self).__init__(dimx=dimx,dimz=dimz,rnn_type=rnn_type,inference_rnn=inference_rnn)
 
         if layer_channels is None:
             layer_channels = (64,128)
@@ -256,10 +266,12 @@ class DCAE(DSAE):
         self.rnn_type = rnn_type
         if rnn_type == 'gru':  
             self.gru_generate = nn.GRU(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
-            self.gru_infer = nn.GRU(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
+            if inference_rnn:
+                self.gru_infer = nn.GRU(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
         else:
             self.gru_generate = nn.LSTM(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
-            self.gru_infer = nn.LSTM(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
+            if inference_rnn:
+                self.gru_infer = nn.LSTM(dimg,dimg,num_layers=self.num_layers,bidirectional=True,batch_first=True)
         
         
         self.make_transition_nets(dimg,chans,dimz,dimh)
@@ -303,8 +315,6 @@ class DCAE(DSAE):
         z = z.view(z.shape[0],self.conv_channels,-1,z.shape[-1])
         y = self.Decoder(z)
         return y
-
-
 
 
 class LinearBlock(nn.Module):
@@ -801,7 +811,7 @@ class Padder(nn.Module):
 
 
 class Separator(nn.Module):
-    def __init__(self,model:'DCAE',compression=.5,n_fft=512,hop_length=128) -> None:
+    def __init__(self,model:'DCAE',compression=.5,n_fft=512,hop_length=128,mask=True) -> None:
         super(Separator,self).__init__()
 
         self.win_length = n_fft
@@ -816,6 +826,8 @@ class Separator(nn.Module):
 
         self.win = torch.hann_window(self.win_length) 
         self.normalizer = self.win.pow(2.0).sum().sqrt()
+
+        self.mask = mask
 
         
     def preprocess(self,input:torch.Tensor):
@@ -849,9 +861,10 @@ class Separator(nn.Module):
         Y_hat = output['recon_x']
         S_hat = output['recon_s']
 
-        Mask = S_hat * (Y/Y_hat).unsqueeze(1)
+        if self.mask:
+            S_hat = S_hat * (Y/Y_hat).unsqueeze(1)
         
-        S_hat_stft = Mask * torch.exp(1j*Y_stft.angle()).unsqueeze(1)
+        S_hat_stft = S_hat * torch.exp(1j*Y_stft.angle()).unsqueeze(1)
 
         dims = S_hat_stft.shape
         S_hat_stft = S_hat_stft.view(-1,dims[-2],dims[-1])
@@ -940,11 +953,11 @@ class StridedDilatedEncoder(nn.Module):
         return self.Network(x)
     
 class DSVAE(DCAE):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='strided', num_layers=1, scale_invariant=False, layer_channels=None, kernel_size=(3, 2), stride=(2, 1), padding=(1, 0), dilation=(1, 1), variance=0.1, activate_final_layer=True, separator_kernel_size=1,separator_layers=1,separator_dilation=1,separator_channels=32,rnn_type='gru'):
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='strided', num_layers=1, scale_invariant=False, layer_channels=None, kernel_size=(3, 2), stride=(2, 1), padding=(1, 0), dilation=(1, 1), variance=0.1, activate_final_layer=True, separator_kernel_size=1,separator_layers=1,separator_dilation=1,separator_channels=32,rnn_type='gru',inference_rnn=True):
         if layer_channels is None:
             layer_channels = (32,64,64,64)
 
-        super().__init__(dimx, dimz, dimh, dimg, chans, num_sources, net_type, num_layers, scale_invariant, layer_channels, kernel_size, stride, padding, dilation, variance, activate_final_layer, separator_kernel_size,rnn_type=rnn_type)
+        super().__init__(dimx, dimz, dimh, dimg, chans, num_sources, net_type, num_layers, scale_invariant, layer_channels, kernel_size, stride, padding, dilation, variance, activate_final_layer, separator_kernel_size,rnn_type=rnn_type,inference_rnn=inference_rnn)
 
         kwds_feature_conv = dict(kernel_size=kernel_size,stride=stride,padding=padding,dilation=dilation)
         self.Encoder = StridedDilatedEncoder(1,self.conv_channels,layer_channels=layer_channels,**kwds_feature_conv)
@@ -971,7 +984,7 @@ if __name__ == "__main__":
     input = torch.randn(2,T)
     input*= 0
     input[:,T//2] = 1
-    model = DSVAE(num_sources=2,dimx=257,dimz=16,dimh=256,kernel_size=(3,3),stride=(2,1),padding=(1,1),dilation=(1,1),layer_channels=layer_channels,activate_final_layer=True,separator_kernel_size=kernel_size,separator_layers=2,separator_dilation=1,rnn_type='gru',separator_channels=64)
+    model = DSVAE(num_sources=2,dimx=257,dimz=16,dimh=256,kernel_size=(3,3),stride=(2,1),padding=(1,1),dilation=(1,1),layer_channels=layer_channels,activate_final_layer=True,separator_kernel_size=kernel_size,separator_layers=2,separator_dilation=1,rnn_type='gru',separator_channels=64,inference_rnn=False)
 
     separator = Separator(model=model,compression=.5)
     with torch.no_grad():
@@ -982,7 +995,6 @@ if __name__ == "__main__":
         features = model.Encoder(x=data)
         print(features.shape)
         feats = model.feature_encoder(x=data)
-        output = model(data)
 
 
     # plt.plot((input[0]-output[0,0]))
