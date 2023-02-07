@@ -40,7 +40,7 @@ dimz = args.latent_dim
 dimh = args.rnn_dim
 dimg = args.rnn_dim
 lr = 1e-3
-args.cnn_channels = [32,64,128,128,128]
+args.cnn_channels = [32,64,64,64,64]
 
 kernel_size=(3,3)
 stride=(2,1)
@@ -61,11 +61,11 @@ kwds_model = dict(
     kernel_size=kernel_size,stride=stride,padding=padding,
     variance=args.variance,
     activate_final_layer=args.activate_final_layer,
-    rnn_type='gru',
-    inference_rnn=True
+    rnn_type='lstm',
+    inference_rnn=False
     )
     
-model = DSVAE(separator_channels=128,separator_kernel_size=3,separator_layers=3,**kwds_model)
+model = DSVAE(separator_channels=64,separator_kernel_size=3,separator_layers=3,**kwds_model)
 # model = DCAE(**kwds_model)
 
 model.to(device)
