@@ -60,7 +60,6 @@ nfft = 512
 averaged = False
 dim_data = nfft//2+1
 
-
 test_set = RWC(root=path_data)
 test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=False)
 
@@ -96,7 +95,7 @@ model.eval()
 
 print("evaluating {} examples.".format(len(test_set)))
 
-results = dict(sdr=[],sir=[],sar=[],instrument1=[],instrument2=[])
+results = dict(sdr=[],sir=[],sar=[],place=[],instrument=[],instrument1=[],instrument2=[])
 count = 0
 with torch.no_grad():
     for batch_idx, (data) in enumerate(test_loader):
@@ -119,13 +118,15 @@ with torch.no_grad():
             sources_invariant = make_scale_invariant(estimates=baseline_mix,targets=sources)
             SDR, SIR, SAR = compute_measures_batch(estimates=baseline_mix,targets=sources_invariant)
 
-        _,idx = torch.sort(SDR)
+        _,place = torch.sort(SDR)
         
-        results['sdr'].append(SDR.cpu().numpy().mean(-1))
-        results['sar'].append(SAR.cpu().numpy().mean(-1))
-        results['sir'].append(SIR.cpu().numpy().mean(-1))
+        results['sdr'].append(SDR.cpu().numpy().ravel())
+        results['sar'].append(SAR.cpu().numpy().ravel())
+        results['sir'].append(SIR.cpu().numpy().ravel())
+        results['place'].append(place.cpu().numpy().ravel())
+        results['instrument'].append(np.stack([data['instrument1'],data['instrument2']],-1).ravel())
         for key in ['instrument1','instrument2']:
-            results[key].append(data[key])
+            results[key].append(np.array(data[key])[:,None].repeat(2,1).ravel())
 
         if save_audio:
             for i in range(estimates.shape[0]):
