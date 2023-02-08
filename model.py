@@ -827,7 +827,7 @@ class Separator(nn.Module):
 
         self.compression = compression
 
-        self.win = torch.hann_window(self.win_length) 
+        self.register_buffer("win",torch.hann_window(self.win_length))
         self.normalizer = self.win.pow(2.0).sum().sqrt()
 
         self.mask = mask

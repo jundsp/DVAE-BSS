@@ -1,4 +1,4 @@
-#%%
+
 import torch
 import torchaudio
 import os
@@ -19,12 +19,12 @@ import json
 
 args = parser.parse_args()
 
-args.model_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/compression/K5/230122-13058078/"
-args.output_path = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/test"
-args.data_directory = "/Volumes/JulianSSD/data/RWC_test/"
-path_data = Path(args.data_directory)
-path_model = Path(args.model_directory)
-path_out = Path(args.output_path)
+# args.model_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/compression/K5/230122-13058078/"
+# args.output_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/test"
+# args.data_directory = "/Volumes/JulianSSD/data/RWC_test/"
+path_data = Path(args.data_directory) / "RWC_test"
+path_model = Path(args.model_directory) / args.job_id
+path_out = Path(args.output_directory) / args.job_id
 
 model_path = list(path_model.glob("*.pt"))
 if len(model_path) == 0:
@@ -38,9 +38,11 @@ os.makedirs(path_audio_out,exist_ok=True)
 
 fname = path_model / "configuration.txt"
 with open(fname) as f:
-    data = f.read()
-args = json.loads(data)
-parser.set_defaults(**args)
+    config = f.read()
+config = json.loads(config)
+with open(path_out / 'configuration.txt', 'w') as f:
+    json.dump(config, f, indent=2)
+parser.set_defaults(**config)
 args = parser.parse_args()
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -60,7 +62,7 @@ dim_data = nfft//2+1
 
 
 test_set = RWC(root=path_data)
-test_loader = torch.utils.data.DataLoader(test_set, batch_size=16,shuffle=False)
+test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=False)
 
 # LOAD MODEL
 dimx = dim_data
@@ -131,8 +133,8 @@ with torch.no_grad():
                 count += 1
 
         print("Batch {}/{}".format(batch_idx+1,len(test_loader)))
-        if batch_idx >= 1: 
-            break
+        # if batch_idx >= 1: 
+        #     break
 
 for k in results:
     results[k] = np.concatenate(results[k])
@@ -140,24 +142,9 @@ for k in results:
 df = pd.DataFrame(results)
 df.to_json(path_out / 'results.json',orient='index', indent=2)
 
-# # %%
+
 plt.figure(figsize=(5,8))
 sns.boxplot(data=df)
-plt.savefig(path_out / "boxplot.pdf")
+plt.savefig(path_out / "boxplot.png",dpi=200)
 
 print(df.mean())
-# # %%
-# n = 6
-# X = model.preprocess(mix[[n]]).abs().pow(2).log10()*20
-# S = model.preprocess(sources[n]).abs().pow(2).log10()*20
-# S_hat = model.preprocess(estimates[n]).pow(2).abs().log10()*20
-# # %%
-# fig,ax = plt.subplots(2,3,sharex=True,sharey=True,figsize=(6,4))
-# kwds = dict(aspect='auto',origin='lower',interpolation='none',cmap='Greys',vmin=-100,vmax=0,extent=[0,4,0,8])
-# ax[0,0].imshow(X[0],**kwds)
-# ax[1,0].remove()
-# for k in range(2):
-#     ax[k,1].imshow(S[k],**kwds)
-#     ax[k,2].imshow(S_hat[k],**kwds)
-
-# # %%
