@@ -288,6 +288,41 @@ class AuditoryStreams(Dataset):
 
     def __len__(self) -> int:
         return len(self._info)
+    
+class RWC(Dataset):
+    """RWC test set, pre-mixed
+    """
+
+    def __init__(self,root: str, audio_ext=".wav"):
+
+        self._path = Path(root)
+        self._audio_dir = self._path / 'audio'
+        self._audio_ext = audio_ext
+
+        self._info = pd.read_json(self._path / 'mix.json',orient='index')
+
+    def __getitem__(self, n: int):
+        """Load the n-th sample from the dataset.
+
+        Args:
+            n (int): The index of the sample to be loaded
+
+        Returns:
+            (Tensor, int, str, str, str):
+            ``(waveform, sample_rate, info)``
+        """
+        info = self._info.iloc[n]
+        mix_filepath = self._audio_dir / info['filename']
+        stems_filepath = self._audio_dir / info['stemname']
+        audio_mix, _ = torchaudio.load(mix_filepath)
+        audio_stems, _ = torchaudio.load(stems_filepath)
+        dict_out = dict(mix=audio_mix,stems=audio_stems)
+        for i in ['instrument1','instrument2']:
+            dict_out[i] = info[i]
+        return dict_out
+
+    def __len__(self) -> int:
+        return len(self._info)
 
 class ImagePipeline(torch.nn.Module):
     def __init__(
@@ -464,35 +499,18 @@ class Mixer(torch.nn.Module):
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
-    # dataset = Audioset(root='/home/jneri/projects/def-depalle/jneri/data/MUSDB/',duration=300,path_csv=None,silence=0,starting=60,max_files=2,augment_levels=False)
-    # dataloader = torch.utils.data.DataLoader(dataset,batch_size=4,shuffle=True)
+    test_set = RWC(root="/Volumes/JulianSSD/data/RWC_test/")
 
-    test_set = AuditoryStreams(root="/Users/julian/Documents/Code/data/dataset_harmonic/")
+    data = test_set.__getitem__(500)
+    pipeline = AudioPipeline(n_fft=512,n_time=None,hop_length=128,compression=1)
 
-    data = test_set.__getitem__(0)
-
-
-    pipeline = AudioPipeline(n_fft=512,n_time=64,hop_length=128,compression=.5,output_realimag=False)
-    pipeline_realimg = AudioPipeline(n_fft=512,n_time=64,hop_length=128,compression=.5,output_realimag=True)
-    mixer = Mixer(n_sources=1,average=False)
-    #%%
+    X = pipeline(data['mix'])
+    S = pipeline(data['stems'])
     
-    x = torch.randn(4,16000)
-    data,sources = mixer(x)
-
-    print(data.abs().max())
-    X = pipeline(data)
-    Xc = pipeline_realimg(data)
-    Xc = torch.complex(Xc[:,0],Xc[:,1])
-    X2 = Xc.abs()
-    Xphase = Xc.angle()
-    S = pipeline(sources)
-    
-    #%%
     n = np.random.randint(X.shape[0])
     fig,ax = plt.subplots(3,figsize=(6,6))
-    ax[0].imshow(mag2db(X[n]),aspect='auto',origin='lower',cmap='jet')
-    ax[1].imshow(mag2db(Xphase[n]),aspect='auto',origin='lower')
-    ax[2].imshow(mag2db(X2[n]),aspect='auto',origin='lower',cmap='jet')
+    ax[0].imshow(mag2db(X[0]),aspect='auto',origin='lower',cmap='jet')
+    ax[1].imshow(mag2db(S[0]),aspect='auto',origin='lower',cmap='jet')
+    ax[2].imshow(mag2db(S[1]),aspect='auto',origin='lower',cmap='jet')
     
 # %%
