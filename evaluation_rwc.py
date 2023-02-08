@@ -17,15 +17,27 @@ import re
 import shutil
 import json
 
-model_path = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC/compression/K5/230122-13058078/")
-model_filename = model_path / "svae_RWC_S2_K5_L1_pooled_D256_C5-10.pt"
+args = parser.parse_args(args=[])
 
-path_out = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC/test")
-path_audio_out = Path("/Volumes/JulianSSD/research/svae-bss/RWC_test") / "audio"
+args.model_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/compression/K5/230122-13058078/"
+args.output_path = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/test"
+args.data_directory = "/Volumes/JulianSSD/data/RWC_test/"
+path_data = Path(args.data_directory)
+path_model = Path(args.model_directory)
+path_out = Path(args.output_path)
+
+
+model_path = list(path_model.glob("*.pt"))
+if len(model_path) == 0:
+    raise ValueError("no models found in path")
+else:
+    model_path = model_path[0]
+
+path_audio_out = path_out / "audio"
 os.makedirs(path_out,exist_ok=True)
 os.makedirs(path_audio_out,exist_ok=True)
 
-fname = model_path / "configuration.txt"
+fname = path_model / "configuration.txt"
 with open(fname) as f:
     data = f.read()
 args = json.loads(data)
@@ -47,10 +59,11 @@ nfft = 512
 averaged = False
 dim_data = nfft//2+1
 
-test_set = RWC(root="/Volumes/JulianSSD/data/RWC_test/")
+
+test_set = RWC(root=path_data)
 test_loader = torch.utils.data.DataLoader(test_set, batch_size=16,shuffle=False)
 
-#%% LOAD MODEL
+# LOAD MODEL
 dimx = dim_data
 dimz = args.latent_dim
 dimh = args.rnn_dim
@@ -74,22 +87,21 @@ kwds_model = dict(
         )
                 
 model = DCAE(**kwds_model)
-model.load_state_dict(load_state_dict(path=model_filename))
+model.load_state_dict(load_state_dict(path=model_path))
 
 model = Separator(model,compression=args.compression)
 model.to(device)
-
-#%%
 model.eval()
+
 print("evaluating {} examples.".format(len(test_set)))
 
 results = dict(sdr=[],sir=[],sar=[],instrument1=[],instrument2=[])
-
 count = 0
 with torch.no_grad():
     for batch_idx, (data) in enumerate(test_loader):
-        mix = data['mix'][:,0]
-        sources = data['stems']
+        mix = data['mix'][:,0].to(device)
+        sources = data['stems'].to(device)
+        # Inference
         estimates = model(mix)
 
         estimates, perm = optimal_permute(estimates,sources)
@@ -120,34 +132,31 @@ with torch.no_grad():
                 count += 1
 
         print("Batch {}/{}".format(batch_idx+1,len(test_loader)))
-        # if batch_idx >= 1:
-            # break
+        if batch_idx >= 1: 
+            break
 
-        
-
-#%%
 for k in results:
     results[k] = np.concatenate(results[k])
 
-#%%
 df = pd.DataFrame(results)
 df.to_json(path_out / 'results.json',orient='index', indent=2)
-# %%
-plt.figure(figsize=(5,8))
-sns.violinplot(data=df)
 
-# %%
-n = 6
-X = model.preprocess(mix[[n]]).abs().pow(2).log10()*20
-S = model.preprocess(sources[n]).abs().pow(2).log10()*20
-S_hat = model.preprocess(estimates[n]).pow(2).abs().log10()*20
-# %%
-fig,ax = plt.subplots(2,3,sharex=True,sharey=True,figsize=(6,4))
-kwds = dict(aspect='auto',origin='lower',interpolation='none',cmap='Greys',vmin=-100,vmax=0,extent=[0,4,0,8])
-ax[0,0].imshow(X[0],**kwds)
-ax[1,0].remove()
-for k in range(2):
-    ax[k,1].imshow(S[k],**kwds)
-    ax[k,2].imshow(S_hat[k],**kwds)
+# # %%
+# plt.figure(figsize=(5,8))
+# sns.violinplot(data=df)
 
-# %%
+# # %%
+# n = 6
+# X = model.preprocess(mix[[n]]).abs().pow(2).log10()*20
+# S = model.preprocess(sources[n]).abs().pow(2).log10()*20
+# S_hat = model.preprocess(estimates[n]).pow(2).abs().log10()*20
+# # %%
+# fig,ax = plt.subplots(2,3,sharex=True,sharey=True,figsize=(6,4))
+# kwds = dict(aspect='auto',origin='lower',interpolation='none',cmap='Greys',vmin=-100,vmax=0,extent=[0,4,0,8])
+# ax[0,0].imshow(X[0],**kwds)
+# ax[1,0].remove()
+# for k in range(2):
+#     ax[k,1].imshow(S[k],**kwds)
+#     ax[k,2].imshow(S_hat[k],**kwds)
+
+# # %%
