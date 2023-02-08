@@ -17,7 +17,7 @@ import re
 import shutil
 import json
 
-args = parser.parse_args(args=[])
+args = parser.parse_args()
 
 args.model_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/compression/K5/230122-13058078/"
 args.output_path = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/test"
@@ -25,7 +25,6 @@ args.data_directory = "/Volumes/JulianSSD/data/RWC_test/"
 path_data = Path(args.data_directory)
 path_model = Path(args.model_directory)
 path_out = Path(args.output_path)
-
 
 model_path = list(path_model.glob("*.pt"))
 if len(model_path) == 0:
@@ -42,7 +41,7 @@ with open(fname) as f:
     data = f.read()
 args = json.loads(data)
 parser.set_defaults(**args)
-args = parser.parse_args(args=[])
+args = parser.parse_args()
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -142,9 +141,11 @@ df = pd.DataFrame(results)
 df.to_json(path_out / 'results.json',orient='index', indent=2)
 
 # # %%
-# plt.figure(figsize=(5,8))
-# sns.violinplot(data=df)
+plt.figure(figsize=(5,8))
+sns.boxplot(data=df)
+plt.savefig(path_out / "boxplot.pdf")
 
+print(df.mean())
 # # %%
 # n = 6
 # X = model.preprocess(mix[[n]]).abs().pow(2).log10()*20
