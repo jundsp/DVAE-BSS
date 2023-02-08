@@ -17,11 +17,12 @@ import re
 import shutil
 import json
 
-args = parser.parse_args()
+args = parser.parse_args(args=[])
 
-# args.model_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/compression/K5/230122-13058078/"
-# args.output_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/test"
-# args.data_directory = "/Volumes/JulianSSD/data/RWC_test/"
+args.model_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/compression/K5/"
+args.output_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/test"
+args.data_directory = "/Volumes/JulianSSD/data/"
+args.job_id = "230122-13058078"
 path_data = Path(args.data_directory) / "RWC_test"
 path_model = Path(args.model_directory) / args.job_id
 path_out = Path(args.output_directory) / args.job_id
@@ -43,7 +44,7 @@ config = json.loads(config)
 with open(path_out / 'configuration.txt', 'w') as f:
     json.dump(config, f, indent=2)
 parser.set_defaults(**config)
-args = parser.parse_args()
+args = parser.parse_args(args=[])
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -60,9 +61,8 @@ nfft = 512
 averaged = False
 dim_data = nfft//2+1
 
-
 test_set = RWC(root=path_data)
-test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=False)
+test_loader = torch.utils.data.DataLoader(test_set, batch_size=8,shuffle=False)
 
 # LOAD MODEL
 dimx = dim_data
@@ -96,7 +96,7 @@ model.eval()
 
 print("evaluating {} examples.".format(len(test_set)))
 
-results = dict(sdr=[],sir=[],sar=[],instrument1=[],instrument2=[])
+results = dict(sdr=[],sir=[],sar=[],place=[],instrument=[],instrument1=[],instrument2=[])
 count = 0
 with torch.no_grad():
     for batch_idx, (data) in enumerate(test_loader):
@@ -119,13 +119,15 @@ with torch.no_grad():
             sources_invariant = make_scale_invariant(estimates=baseline_mix,targets=sources)
             SDR, SIR, SAR = compute_measures_batch(estimates=baseline_mix,targets=sources_invariant)
 
-        _,idx = torch.sort(SDR)
+        _,place = torch.sort(SDR)
         
-        results['sdr'].append(SDR.cpu().numpy().mean(-1))
-        results['sar'].append(SAR.cpu().numpy().mean(-1))
-        results['sir'].append(SIR.cpu().numpy().mean(-1))
+        results['sdr'].append(SDR.cpu().numpy().ravel())
+        results['sar'].append(SAR.cpu().numpy().ravel())
+        results['sir'].append(SIR.cpu().numpy().ravel())
+        results['place'].append(place.cpu().numpy().ravel())
+        results['instrument'].append(np.stack([data['instrument1'],data['instrument2']],-1).ravel())
         for key in ['instrument1','instrument2']:
-            results[key].append(data[key])
+            results[key].append(np.array(data[key])[:,None].repeat(2,1).ravel())
 
         if save_audio:
             for i in range(estimates.shape[0]):
@@ -133,8 +135,8 @@ with torch.no_grad():
                 count += 1
 
         print("Batch {}/{}".format(batch_idx+1,len(test_loader)))
-        # if batch_idx >= 1: 
-        #     break
+        if batch_idx >= 1: 
+            break
 
 for k in results:
     results[k] = np.concatenate(results[k])
