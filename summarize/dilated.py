@@ -51,23 +51,8 @@ def get_model(path:Path,name:str):
     return model
 
 def get_dataset(path:Path,name='RWC',batch_size=2,duration=4):
-    data_root = path / "RWC_dataset"
-    path_csv = 'test.csv'
 
-    if name == 'composite':
-        data_root = path
-        path_csv = 'composite/test.csv'
-    if name == 'MUMS':
-        data_root = path / "MUMS"
-        path_csv = None
-    if name == 'nsynth':
-        data_root = path / "nsynth-test/audio"
-        path_csv = None
-    if name == 'MUSDB':
-        data_root = path / "MUSDB"
-        path_csv = 'test.csv'
-
-    test_set = Audioset(root=data_root,path_csv=path_csv,augment_levels=False,duration=duration,silence=1,starting=0,max_files=1)
+    test_set = RWC(root=path / 'RWC_test')
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size,shuffle=True)
     return test_loader
 
@@ -81,27 +66,24 @@ def plot_spectrogram(y,ax=None,**kwds):
     ax.set_ylim(0)
 
 K = 4
-path = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC/dilated")
-name =  "svae_RWC_S2_K4_L1_pooled_D24_C5-10.pt"
+path = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC/dilated/230208-13576125")
+name =  "svae_RWC_S2_K4_L1_pooled_D16_C5-10.pt"
 model = get_model(path,name)
 
 T = 8
 dataset = get_dataset(path=Path("/Volumes/JulianSSD/data"),duration=T,batch_size=2,name='RWC')
-mixer = Mixer(n_sources=2)
 
 # torch.manual_seed(7)
 with torch.no_grad():
-    batch,_ = next(iter(dataset))
-    batch += torch.randn_like(batch)*0
-    y,s = mixer(batch)
+    batch = next(iter(dataset))
+    y = batch['mix'][:,0]
+    s = batch['stems']
 
     s_hat = model(y)
     s_hat, perm = optimal_permute(s_hat,s)
 
-
     input = model.preprocess(y).abs()
     output = model.model(input)
-
     
 
 Y = model.preprocess(y).abs()
@@ -130,10 +112,10 @@ with torch.no_grad():
     s_samp, z_samp, h_samp = model.model.sample(N=2048,M=1)
 
 #%%
-k = 2
+k = 0
 plot_spectrogram(s_samp[0,k])
 plt.figure()
-plt.imshow(z_samp[k].T,aspect='auto')
+plt.imshow(z_samp[k].T,aspect='auto',origin='lower',interpolation='none')
 
 gl = GriffinLim(n_fft=512,n_iter=32,win_length=512,hop_length=128,power=1)
 samp_source = gl(s_samp[0,k] ** (1/.5))

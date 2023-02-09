@@ -17,13 +17,13 @@ import re
 import shutil
 import json
 
-args = parser.parse_args(args=[])
+args = parser.parse_args()
 
-args.model_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/compression/K5/"
-args.output_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/test"
-args.data_directory = "/Volumes/JulianSSD/data/"
-args.job_id = "230122-13058078"
-path_data = Path(args.data_directory) / "RWC_test"
+args.model_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/dilated/"
+args.output_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/dilated"
+args.data_directory = "/Volumes/JulianSSD/data/NSYNTH_test"
+args.job_id = "230208-13605818"
+path_data = Path(args.data_directory) 
 path_model = Path(args.model_directory) / args.job_id
 path_out = Path(args.output_directory) / args.job_id
 
@@ -44,7 +44,7 @@ config = json.loads(config)
 with open(path_out / 'configuration.txt', 'w') as f:
     json.dump(config, f, indent=2)
 parser.set_defaults(**config)
-args = parser.parse_args(args=[])
+args = parser.parse_args()
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -61,33 +61,43 @@ nfft = 512
 averaged = False
 dim_data = nfft//2+1
 
-test_set = RWC(root=path_data)
-test_loader = torch.utils.data.DataLoader(test_set, batch_size=8,shuffle=False)
+test_set = NSYNTH(root=path_data)
+test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=False)
 
 # LOAD MODEL
-dimx = dim_data
-dimz = args.latent_dim
-dimh = args.rnn_dim
-dimg = args.rnn_dim
-kernel_size=(3,3)
-stride=(2,2)
-padding=(1,1)
+print(args)
+
+if args.separator_version:
+    kernel_size=(3,3)
+    stride=(2,1)
+    padding=(1,1)
+else:
+    kernel_size=(3,3)
+    stride=(2,2)
+    padding=(1,1)
 
 kwds_model = dict(
-        dimx=dimx,
-        dimz=dimz,
-        dimh=dimh,
-        dimg=dimg,
-        num_sources=args.num_sources,
-        net_type=args.net_type,
-        num_layers=args.num_layers,
-        scale_invariant=True,
-        layer_channels=tuple(args.cnn_channels + [args.cnn_channels[-1]]),
-        kernel_size=kernel_size,stride=stride,padding=padding,
-        activate_final_layer=True
-        )
+    dimx=dim_data,
+    dimz=args.latent_dim,
+    dimh=args.rnn_dim,
+    dimg=args.rnn_dim,
+    num_sources=args.num_sources,
+    net_type=args.net_type,
+    num_layers=args.num_layers,
+    scale_invariant=True,
+    layer_channels=tuple(args.cnn_channels),
+    kernel_size=kernel_size,stride=stride,padding=padding,
+    variance=args.variance,
+    activate_final_layer=args.activate_final_layer,
+    rnn_type=args.rnn_type,
+    inference_rnn=(not args.inference_rnn_off),
+    )
                 
-model = DCAE(**kwds_model)
+if args.separator_version:
+    model = DSVAE(separator_layers=args.separator_layers,separator_kernel_size=args.separator_kernel_size,separator_channels=args.separator_channels,**kwds_model)
+else:
+    model = DCAE(**kwds_model)
+
 model.load_state_dict(load_state_dict(path=model_path))
 
 model = Separator(model,compression=args.compression)
@@ -96,7 +106,7 @@ model.eval()
 
 print("evaluating {} examples.".format(len(test_set)))
 
-results = dict(sdr=[],sir=[],sar=[],place=[],instrument=[],instrument1=[],instrument2=[])
+results = dict(sdr=[],sir=[],sar=[],place=[],instrument=[],instrument1=[],instrument2=[],delta_time=[],pitch=[],delta_pitch=[])
 count = 0
 with torch.no_grad():
     for batch_idx, (data) in enumerate(test_loader):
@@ -129,17 +139,27 @@ with torch.no_grad():
         for key in ['instrument1','instrument2']:
             results[key].append(np.array(data[key])[:,None].repeat(2,1).ravel())
 
+        if 'delta_time' in data:
+            results['delta_time'].append(np.array(data['delta_time'])[:,None].repeat(2,1).ravel())
+
+        if 'pitch1' in data:
+            results['pitch'].append(np.stack([data['pitch1'],data['pitch2']],-1).ravel())
+            results['delta_pitch'].append((np.array(data['pitch1'])-np.array(data['pitch2']))[:,None].repeat(2,1).ravel())
+
         if save_audio:
             for i in range(estimates.shape[0]):
                 torchaudio.save(path_audio_out / "estimates_{}.wav".format(count),estimates[i,:2],16000)
                 count += 1
 
         print("Batch {}/{}".format(batch_idx+1,len(test_loader)))
-        if batch_idx >= 1: 
+        if batch_idx >= 5: 
             break
 
-for k in results:
-    results[k] = np.concatenate(results[k])
+for k in list(results):
+    if len(results[k])  > 0:
+        results[k] = np.concatenate(results[k])
+    else:
+        results.pop(k)
 
 df = pd.DataFrame(results)
 df.to_json(path_out / 'results.json',orient='index', indent=2)

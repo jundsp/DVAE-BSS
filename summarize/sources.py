@@ -8,6 +8,8 @@ import glob
 import pandas as pd
 import json
 import torch
+import numpy as np
+from pathlib import Path
 plt.rcParams['figure.dpi'] = 150
 plt.rcParams.update({
     "text.usetex": True,
@@ -17,21 +19,19 @@ plt.rcParams.update({
 })
 # sns.set()
 
-root = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/sources/"
-output_directory = root + "/results"
+root = Path("/Users/julian/Documents/Code/Python/Results/SVAE/NSYNTH_test/sources/")
+output_directory = root / "results"
 os.makedirs(output_directory,exist_ok=True)
   
 compare_along = "sources"
 # %%
-csv_name = glob.glob(root + "*/*/bss.csv")
+json_name = root.glob("*/results.json")
 DF = []
-for ii,cc in enumerate(csv_name):
-    df = pd.read_csv(cc)
-    df.rename(columns={'Source': 'estimate'},inplace=True)
-    df['estimate'] = 2-df['estimate']
+for ii,cc in enumerate(json_name):
+    df = pd.read_json(cc,orient="index")
+    df['place'] = 2-df['place']
 
-
-    fname = os.path.dirname(cc) + "/configuration.txt"
+    fname = cc.parents[0] / "configuration.txt"
     with open(fname) as f:
         data = f.read()
     js = json.loads(data)
@@ -43,9 +43,9 @@ for ii,cc in enumerate(csv_name):
 #%%
 df = pd.concat(DF)
 df = df.reset_index()
-df.rename(columns={'SDR': 'SI-SDR'},inplace=True)
+df.rename(columns={'sdr': 'SI-SDR','sir': 'SIR','sar': 'SAR'},inplace=True)
 
-dfm = df.melt(['sources','variance','index','estimate'], var_name='metric', value_name='vals')
+dfm = df.melt(['sources','variance','index','place'], var_name='metric', value_name='vals')
 
 #%%
 fig,ax = plt.subplots(1,3,figsize=(10,3))
@@ -60,7 +60,7 @@ sns.boxplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],**kwds_box)
 sns.boxplot(data=df,x=compare_along,y='SIR',ax=ax[1],**kwds_box)
 sns.boxplot(data=df,x=compare_along,y='SAR',ax=ax[2],**kwds_box)
 plt.tight_layout()
-plt.savefig(output_directory + "/boxplot_nofill.pdf")
+plt.savefig(output_directory / "boxplot_nofill.pdf")
 
 #%%
 fig,ax = plt.subplots(1,3,figsize=(10,3))
@@ -69,31 +69,31 @@ sns.boxplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],**kwds_box)
 sns.boxplot(data=df,x=compare_along,y='SIR',ax=ax[1],**kwds_box)
 sns.boxplot(data=df,x=compare_along,y='SAR',ax=ax[2],**kwds_box)
 plt.tight_layout()
-plt.savefig(output_directory + "/boxplot.pdf")
+plt.savefig(output_directory / "boxplot.pdf")
 
 # %%
 fig,ax = plt.subplots(1,3,figsize=(10,3))
-sns.boxplot(data=df,hue=compare_along,y='SI-SDR',ax=ax[0],showfliers=False,x='estimate')
-sns.boxplot(data=df,hue=compare_along,y='SIR',ax=ax[1],showfliers=False,x='estimate')
-sns.boxplot(data=df,hue=compare_along,y='SAR',ax=ax[2],showfliers=False,x='estimate')
+sns.boxplot(data=df,hue=compare_along,y='SI-SDR',ax=ax[0],showfliers=False,x='place')
+sns.boxplot(data=df,hue=compare_along,y='SIR',ax=ax[1],showfliers=False,x='place')
+sns.boxplot(data=df,hue=compare_along,y='SAR',ax=ax[2],showfliers=False,x='place')
 ax[0].legend([],[], frameon=False)
 ax[1].legend([],[], frameon=False)
 
 plt.legend(bbox_to_anchor=(1.1, 1), loc='upper left')
 plt.tight_layout()
-plt.savefig(output_directory + "/boxplot_estims.pdf")
+plt.savefig(output_directory / "boxplot_estims.pdf")
 
 # %%
 fig,ax = plt.subplots(1,3,figsize=(10,3))
-sns.boxplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],showfliers=False,hue='estimate')
-sns.boxplot(data=df,x=compare_along,y='SIR',ax=ax[1],showfliers=False,hue='estimate')
-sns.boxplot(data=df,x=compare_along,y='SAR',ax=ax[2],showfliers=False,hue='estimate')
+sns.boxplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],showfliers=False,hue='place')
+sns.boxplot(data=df,x=compare_along,y='SIR',ax=ax[1],showfliers=False,hue='place')
+sns.boxplot(data=df,x=compare_along,y='SAR',ax=ax[2],showfliers=False,hue='place')
 ax[0].legend([],[], frameon=False)
 ax[1].legend([],[], frameon=False)
 
 plt.legend(bbox_to_anchor=(1.1, 1), loc='upper left')
 plt.tight_layout()
-plt.savefig(output_directory + "/boxplot_variance.pdf")
+plt.savefig(output_directory / "boxplot_variance.pdf")
 
 # %%
 fig,ax = plt.subplots(1,3,figsize=(10,3))
@@ -103,12 +103,12 @@ sns.pointplot(data=df,x=compare_along,y='SIR',ax=ax[1],**kwds_line)
 sns.pointplot(data=df,x=compare_along,y='SAR',ax=ax[2],**kwds_line)
 plt.tight_layout()
 ax[1].set_title('.5 Standard Deviation')
-plt.savefig(output_directory + "/lineplot_sd.pdf")
+plt.savefig(output_directory / "lineplot_sd.pdf")
 
 
 #%%
 fig,ax = plt.subplots(1,3,figsize=(10,3))
-kwds_line = dict(estimator='median',hue='estimate')
+kwds_line = dict(estimator='median',hue='place')
 sns.pointplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],**kwds_line)
 sns.pointplot(data=df,x=compare_along,y='SIR',ax=ax[1],**kwds_line)
 sns.pointplot(data=df,x=compare_along,y='SAR',ax=ax[2],**kwds_line)
@@ -117,23 +117,60 @@ for _ax in ax:
     # _ax.set_xlim(2,6)
     _ax.set_xlabel(r'model sources $K$')
 plt.tight_layout()
-plt.savefig(output_directory + "/lineplot_ci.pdf")
+plt.savefig(output_directory / "lineplot_ci.pdf")
+
 # %%
 
+df5 = df[df['sources']==6]
 
-l1 = torch.nn.L1Loss(reduction='none')
+i1 = df5['instrument1'].values
+i2 = df5['instrument2'].values
+mix = np.stack([i1,i2],-1)
+mixi = np.zeros_like(mix).astype(int)
 
-x = torch.tensor(torch.linspace(-3,3,101),requires_grad=True)
-m = torch.zeros(101)
+temp = np.unique(mix[:,0])
+for i,j in enumerate(temp):
+    mixi[mix==j] = i
+inds = mixi.argsort(-1)
+for i in range(inds.shape[0]):
+    mix[i] = mix[i,inds[i]]
 
-scale = .1
-
-loss = l1(x,m)/scale
-
-
-loss2 = (x-m).abs() / scale
-
-
-plt.plot(loss.detach())
-plt.plot(loss2.detach(),'--')
+df5['instrument1'] = mix[:,0]
+df5['instrument2'] = mix[:,1]
+df_instr = df5.groupby(['instrument1','instrument2']).mean().reset_index()
+mtx = df_instr.pivot(index='instrument1', columns='instrument2', values='SI-SDR')
+# %%
+ax = sns.heatmap(data=mtx,square=True,annot=True,cmap='plasma',fmt="2.0f",cbar_kws={'label': 'SI-SDR'})
+ax.set(xlabel="", ylabel="")
+ax.xaxis.tick_top()
+plt.xticks(rotation=50)
+plt.tight_layout()
+plt.savefig(output_directory/"heatmap_instr.pdf")
+# %%
+plt.figure(figsize=(4,2.5))
+df5=df5.round({'delta_time':1})
+sns.lineplot(data=df5,x='delta_time',y='SI-SDR')
+plt.xlabel(r"$\Delta$ time (s)")
+plt.xlim(0,.9)
+plt.tight_layout()
+plt.savefig(output_directory/"time_sdr.pdf")
+# %%
+df6 = df[df['sources']==6]
+plt.figure(figsize=(4,2.5))
+sns.lmplot(data=df6[df6['delta_time']<=.9],x='delta_time',y='SI-SDR',order=3,scatter=None)
+# plt.ylim(4,10)
+plt.xlabel(r"$\Delta$ time (s)")
+plt.xlim(0,.9)
+plt.tight_layout()
+# %%
+df_pitch = df[df['sources']==6]
+df_pitch['delta_pitch'] = np.abs(df_pitch['delta_pitch'])
+df_pitch = df_pitch[df_pitch['delta_pitch']<(5*12)]
+plt.figure(figsize=(4,2.5))
+sns.lineplot(data=df_pitch,x='delta_pitch',y='SI-SDR')
+plt.xlabel(r"$| \Delta |$ semitones")
+plt.xlim(0,5*12)
+plt.xticks(np.arange(0,5*12,12))
+plt.tight_layout()
+plt.savefig(output_directory/"pitch_sdr.pdf")
 # %%
