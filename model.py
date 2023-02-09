@@ -889,6 +889,21 @@ class Conv1dLayer(nn.Module):
 
     def forward(self,x):
         return self.net(x)
+    
+class ConvTranspose1dLayer(nn.Module):
+    def __init__(self,input_channels,output_channels,kernel_size=3,stride=1,padding=0,dilation=1,batchnorm=True,activation=True,bias=True) -> None:
+        super(ConvTranspose1dLayer,self).__init__()
+
+        mods = nn.ModuleList()
+        mods.append(nn.ConvTranspose1d(input_channels,output_channels,kernel_size=kernel_size,stride=stride,padding=padding,dilation=dilation,bias=bias))
+        if activation:
+            mods.append(nn.LeakyReLU())
+        if batchnorm:
+            mods.append(nn.BatchNorm1d(output_channels))
+        self.net = nn.Sequential(*mods)
+
+    def forward(self,x):
+        return self.net(x)
 
 class Conv1dSeparator(nn.Module):
     def __init__(self,input_channels,output_channels,kernel_size=1,stride=1,padding=0,dilation=1,layers=1,layer_channels=32):
@@ -929,7 +944,57 @@ class TConvSeparator(nn.Module):
 
     def forward(self, x):
         return self.Network(x)
+    
 
+class TConvTranspose(nn.Module):
+    def __init__(self,input_channels,output_channels,kernel_size=2,stride=1,padding=0,dilation=1,layers=1,layer_channels=32,starting_layer=0,bias=True):
+        super(TConvTranspose, self).__init__()
+
+        dilations = 2**(np.arange(layers)+starting_layer)
+        fields = (kernel_size-1)*dilations+1
+        paddings = fields//2
+
+        mlist = nn.ModuleList()
+        if layers == 1:
+            kwds = dict(kernel_size=kernel_size,stride=stride,padding=paddings[0],dilation=dilations[0])
+            mlist.append(ConvTranspose1dLayer(input_channels,output_channels,batchnorm=True,bias=bias,**kwds))
+        else:
+            mlist.append(ConvTranspose1dLayer(input_channels,layer_channels,kernel_size=kernel_size,stride=stride,padding=paddings[-1],dilation=dilations[-1],batchnorm=True,bias=bias))
+            for ii in range(layers-3,-1,-1):
+                mlist.append(ConvTranspose1dLayer(layer_channels,layer_channels,kernel_size=kernel_size,stride=stride,padding=paddings[ii],dilation=dilations[ii],batchnorm=True,bias=bias))
+            mlist.append(ConvTranspose1dLayer(layer_channels,output_channels,kernel_size=kernel_size,stride=stride,padding=paddings[0],dilation=dilations[0],batchnorm=False,bias=bias))
+
+        self.Network = nn.Sequential(*mlist)
+
+    def forward(self, x):
+        return self.Network(x)
+
+    
+class StridedDilatedDecoder(nn.Module):
+    def __init__(self,input_channels,output_channels,kernel_size=(3,3),stride=(2,1),padding=(1,1),dilation=(1,1),layer_channels=None,activate_final_layer=True):
+        super(StridedDilatedDecoder, self).__init__()
+        if layer_channels is None: 
+            layer_channels = (32,64,128)
+
+        layers = len(layer_channels)
+        dilations = 2**np.arange(layers)
+        fields = (kernel_size[-1]-1)*dilations+1
+        padding_1 = padding[0]
+        padding_2 = fields//2
+        padding = [(padding_1,k) for k in padding_2]
+        dilation = [(1,k) for k in dilations]
+
+        mlist = nn.ModuleList()
+        mlist.append(ConvTranspose2dLayer(input_channels,layer_channels[-1],kernel_size=kernel_size,stride=stride,padding=padding[-1],dilation=dilation[-1]))
+        for ii in range(len(layer_channels)-3,-1,-1):
+            mlist.append(ConvTranspose2dLayer(layer_channels[ii+1],layer_channels[ii],kernel_size=kernel_size,stride=stride,padding=padding[ii],dilation=dilation[ii]))
+        mlist.append(ConvTranspose2dLayer(layer_channels[0],output_channels,kernel_size=kernel_size,stride=stride,padding=padding[0],dilation=dilation[0],batchnorm=False,activation=activate_final_layer))
+
+        self.Network = nn.Sequential(*mlist)
+
+    def forward(self, x):
+        return self.Network(x)
+    
 class StridedDilatedEncoder(nn.Module):
     def __init__(self,input_channels,output_channels,kernel_size=(3,3),stride=(2,1),padding=(1,1),dilation=(1,1),layer_channels=None,bias=True):
         super(StridedDilatedEncoder, self).__init__()
@@ -964,8 +1029,13 @@ class DSVAE(DCAE):
 
         kwds_feature_conv = dict(kernel_size=kernel_size,stride=stride,padding=padding,dilation=dilation)
         self.Encoder = StridedDilatedEncoder(1,self.conv_channels,layer_channels=layer_channels,**kwds_feature_conv)
+        self.Decoder = StridedDilatedDecoder(self.conv_channels,1,layer_channels=layer_channels,activate_final_layer=activate_final_layer,**kwds_feature_conv)
+
+        
 
         self.fc_encoder = TConvSeparator(input_channels=self.encoded_features,output_channels=self.dimg*self.num_sources,kernel_size=separator_kernel_size,stride=1,padding=1,dilation=1,layers=separator_layers,layer_channels=separator_channels,starting_layer=len(layer_channels))
+
+        self.fc_decoder = TConvTranspose(input_channels=self.dimz,output_channels=self.encoded_features,kernel_size=separator_kernel_size,stride=1,padding=1,dilation=1,layers=separator_layers,layer_channels=separator_channels,starting_layer=len(layer_channels))
 
 
 
@@ -981,13 +1051,14 @@ if __name__ == "__main__":
     field = (kernel_size-1)*dilation+1
 
     print(receptive_field(field,field*0+1))
-    layer_channels = tuple([32]*layers)
+    layer_channels = tuple([16,32,64,128,128])
      
-    T = 16000*8
+    T = 16000*4
     input = torch.randn(2,T)
     input*= 0
     input[:,T//2] = 1
-    model = DSVAE(num_sources=2,dimx=257,dimz=16,dimh=256,kernel_size=(3,3),stride=(2,1),padding=(1,1),dilation=(1,1),layer_channels=layer_channels,activate_final_layer=True,separator_kernel_size=kernel_size,separator_layers=3,separator_dilation=1,rnn_type='gru',separator_channels=64,inference_rnn=False)
+    model = DSVAE(num_sources=2,dimx=257,dimz=32,dimh=256,kernel_size=(3,3),stride=(2,1),padding=(1,1),dilation=(1,1),layer_channels=layer_channels,activate_final_layer=True,separator_kernel_size=kernel_size,separator_layers=1,separator_dilation=1,rnn_type='gru',separator_channels=64,inference_rnn=False)
+    # model = DCAE(num_sources=2,dimx=257,dimz=16,dimh=256,kernel_size=(3,3),stride=(2,2),padding=(1,1),dilation=(1,1),layer_channels=layer_channels,activate_final_layer=True)
 
     separator = Separator(model=model,compression=.5)
     with torch.no_grad():
@@ -998,6 +1069,7 @@ if __name__ == "__main__":
         features = model.Encoder(x=data)
         print(features.shape)
         feats = model.feature_encoder(x=data)
+        output_model = model(data)
 
 
     plt.plot((input[0]-output[0,0]))
@@ -1023,3 +1095,14 @@ if __name__ == "__main__":
     plt.plot(temp2)
     print((temp2 > 0).sum())
     # %%
+    z = torch.zeros_like(output_model['z'])
+    z[:,z.shape[1]//2] = 1
+    features = model.decode(z).detach()
+
+    plt.imshow(features[0,0],aspect='auto')
+
+    print(features.max())
+    print(features.min())
+
+
+# %%

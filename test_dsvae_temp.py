@@ -28,14 +28,14 @@ dim_data = (nfft//2+1,args.n_time)
 
 args.num_sources = 1
 args.compression = .5
-args.n_time = 1025
+args.n_time = 257
 mixer = Mixer(n_sources=args.num_targets,average=args.average_mix)
 pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
 pipeline = pipeline.to(device)
 
 dimx = dim_data[0]
-args.latent_dim = 16
-args.rnn_dim = 256
+args.latent_dim = 32
+args.rnn_dim = 512
 dimz = args.latent_dim
 dimh = args.rnn_dim
 dimg = args.rnn_dim
@@ -46,7 +46,7 @@ kernel_size=(3,3)
 stride=(2,1)
 padding=(1,1)
 
-args.activate_final_layer = True
+args.activate_final_layer = False
 
 kwds_model = dict(
     dimx=dimx,
@@ -58,19 +58,18 @@ kwds_model = dict(
     num_layers=args.num_layers,
     scale_invariant=True,
     layer_channels=tuple(args.cnn_channels),
-    kernel_size=kernel_size,stride=stride,padding=padding,
     variance=args.variance,
     activate_final_layer=args.activate_final_layer,
-    rnn_type='lstm',
+    rnn_type='gru',
     inference_rnn=False
     )
     
-model = DSVAE(separator_channels=64,separator_kernel_size=3,separator_layers=3,**kwds_model)
-# model = DCAE(**kwds_model)
+model = DSVAE(kernel_size=kernel_size,stride=stride,padding=padding,separator_channels=64,separator_kernel_size=3,separator_layers=3,**kwds_model)
+# model = DCAE(kernel_size=kernel_size,stride=(2,2),padding=padding,**kwds_model)
 
 model.to(device)
 
-lossfun = LossFunction(complex_version=True).to(device)
+lossfun = LossFunction(complex_version=False).to(device)
 
 optimizer = optim.AdamW(params=model.parameters(),lr=lr,weight_decay=2e-5)
 
@@ -86,7 +85,7 @@ audio = torch.cat([audio]*1,0)
 #%%
 model.train() 
 st = time.time()
-for epoch in range(1,10):
+for epoch in range(1,200):
     data = pipeline(audio)
     output = model(data)
 
@@ -120,4 +119,9 @@ for k in range(args.num_sources):
     ax[k].imshow(mag2db(source_mags[0,k]),**kwds)
 
 
+# %%
+with torch.no_grad():
+    x,z,h=model.sample(N=512)
+
+plt.imshow(x[0,0],aspect='auto')
 # %%
