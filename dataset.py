@@ -54,7 +54,7 @@ def get_datasets(dataset,path,args):
         test_set =  Audioset(root=path,path_csv='composite/validate.csv',augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=.5)
 
     if dataset == 'nsynth':
-        kwds_dset = dict(augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=0,remove_silence=args.remove_silence)
+        kwds_dset = dict(augment_levels=args.augment_levels,duration=float(args.duration),silence=.5,starting=.1,ending=.5,remove_silence=args.remove_silence)
         train_set = Audioset(root=path + '/nsynth-train',path_csv=None,**kwds_dset)
         test_set =  Audioset(root=path + '/nsynth-valid',path_csv=None,**kwds_dset)
 
