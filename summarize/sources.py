@@ -138,20 +138,22 @@ for i in range(inds.shape[0]):
 df5['instrument1'] = mix[:,0]
 df5['instrument2'] = mix[:,1]
 df_instr = df5.groupby(['instrument1','instrument2']).mean().reset_index()
-mtx = df_instr.pivot(index='instrument1', columns='instrument2', values='SI-SDR')
+mtx = df_instr.pivot(index='instrument2', columns='instrument1', values='SI-SDR')
 # %%
+plt.figure(figsize=(4,3))
 ax = sns.heatmap(data=mtx,square=True,annot=True,cmap='plasma',fmt="2.0f",cbar_kws={'label': 'SI-SDR'})
 ax.set(xlabel="", ylabel="")
-ax.xaxis.tick_top()
-plt.xticks(rotation=50)
+# ax.xaxis.tick_top()
+# plt.xticks(rotation=50,ha='right')
 plt.tight_layout()
 plt.savefig(output_directory/"heatmap_instr.pdf")
 # %%
-plt.figure(figsize=(4,2.5))
+plt.figure(figsize=(3,2))
 df5=df5.round({'delta_time':1})
 sns.lineplot(data=df5,x='delta_time',y='SI-SDR')
-plt.xlabel(r"$\Delta$ time (s)")
+plt.xlabel(r"$|\Delta|$ time (s)")
 plt.xlim(0,.9)
+plt.ylim(5,15)
 plt.tight_layout()
 plt.savefig(output_directory/"time_sdr.pdf")
 # %%
@@ -166,10 +168,11 @@ plt.tight_layout()
 df_pitch = df[df['sources']==6]
 df_pitch['delta_pitch'] = np.abs(df_pitch['delta_pitch'])
 df_pitch = df_pitch[df_pitch['delta_pitch']<(5*12)]
-plt.figure(figsize=(4,2.5))
+plt.figure(figsize=(3,2))
 sns.lineplot(data=df_pitch,x='delta_pitch',y='SI-SDR')
 plt.xlabel(r"$| \Delta |$ semitones")
 plt.xlim(0,5*12)
+plt.ylim(0,20)
 plt.xticks(np.arange(0,5*12,12))
 plt.tight_layout()
 plt.savefig(output_directory/"pitch_sdr.pdf")
