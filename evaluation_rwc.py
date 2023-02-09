@@ -19,10 +19,10 @@ import json
 
 args = parser.parse_args()
 
-args.model_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/dilated/"
-args.output_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/dilated"
-args.data_directory = "/Volumes/JulianSSD/data/NSYNTH_test"
-args.job_id = "230208-13605818"
+# args.model_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/dilated/"
+# args.output_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/dilated"
+# args.data_directory = "/Volumes/JulianSSD/data/NSYNTH_test"
+# args.job_id = "230208-13605818"
 path_data = Path(args.data_directory) 
 path_model = Path(args.model_directory) / args.job_id
 path_out = Path(args.output_directory) / args.job_id
@@ -152,8 +152,8 @@ with torch.no_grad():
                 count += 1
 
         print("Batch {}/{}".format(batch_idx+1,len(test_loader)))
-        if batch_idx >= 5: 
-            break
+        # if batch_idx >= 5: 
+        #     break
 
 for k in list(results):
     if len(results[k])  > 0:
