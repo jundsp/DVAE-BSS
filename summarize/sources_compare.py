@@ -44,24 +44,8 @@ def get_model(path:Path,name:str):
     model.eval()
     return model
 
-def get_dataset(path:Path,name='RWC',batch_size=2,duration=4):
-    data_root = path / "RWC_dataset"
-    path_csv = 'test.csv'
-
-    if name == 'composite':
-        data_root = path
-        path_csv = 'composite/test.csv'
-    if name == 'MUMS':
-        data_root = path / "MUMS"
-        path_csv = None
-    if name == 'nsynth':
-        data_root = path / "nsynth-test/audio"
-        path_csv = None
-    if name == 'MUSDB':
-        data_root = path / "MUSDB"
-        path_csv = 'test.csv'
-
-    test_set = Audioset(root=data_root,path_csv=path_csv,augment_levels=False,duration=duration,silence=0,starting=0,max_files=1)
+def get_dataset(path:Path,batch_size=1):
+    test_set = NSYNTH(root=path)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size,shuffle=True)
     return test_loader
 
@@ -75,31 +59,49 @@ def plot_spectrogram(y,ax=None,**kwds):
     ax.set_ylim(0)
 
 K = 5
-path = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC/dilated/K{}/".format(K))
+path = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC/sources/K{}/".format(K))
 name =  "svae_rwc_K{}_c5.pt".format(K)
 model = get_model(path,name)
+model.eval()
 
-T = 3
-dataset = get_dataset(path=Path("/Volumes/JulianSSD/data"),duration=T,batch_size=2,name='RWC')
-mixer = Mixer(n_sources=2)
+
+dataset = get_dataset(path=Path("/Volumes/JulianSSD/data/NSYNTH_test"))
 
 torch.manual_seed(7)
 with torch.no_grad():
-    batch,_ = next(iter(dataset))
-    batch += torch.randn_like(batch)*0
-    y,s = mixer(batch)
+    batch = next(iter(dataset))
+    y = batch['mix'][:,0]
+    s = batch['stems']
 
     s_hat = model(y)
-    s_hat = optimal_permute(s_hat,s)
+    s_hat, perm = optimal_permute(s_hat,s)
 
 Y = model.preprocess(y).abs()
 S = model.preprocess(s.view(-1,s.shape[-1])).abs()
 S_hat = model.preprocess(s_hat.view(-1,s_hat.shape[-1])).abs()
 
 plt.figure()
+T = y.shape[-1]/16e3
 plot_spectrogram(Y[0],extent=[0,T,0,8],vmin=-60,vmax=7)
-fig,ax = plt.subplots(2,2,sharey=True,sharex=True,figsize=(5,3))
+fig,ax = plt.subplots(3,K,sharey=True,sharex=True,figsize=(6,3))
+ax = ax.T
+
+plot_spectrogram(Y[0],extent=[0,T,0,8],vmin=-60,vmax=7,ax=ax[0,0])
+for i in range(1,K):
+    ax[i,0].remove()
 for i in range(2):
-    plot_spectrogram(S[i],extent=[0,T,0,8],vmin=-60,vmax=7,ax=ax[i,0])
-    plot_spectrogram(S_hat[i],extent=[0,T,0,8],vmin=-60,vmax=7,ax=ax[i,1])
+    plot_spectrogram(S[i],extent=[0,T,0,8],vmin=-60,vmax=7,ax=ax[i,1])
+for i in range(2,K):
+    ax[i,1].remove()
+for i in range(K):
+    plot_spectrogram(S_hat[i],extent=[0,T,0,8],vmin=-60,vmax=7,ax=ax[i,2])
+    ax[i,2].set_xlabel(r'$t$ (s)')
+for i in range(3):
+    ax[0,i].set_ylabel(r'$f$ (kHz)')
 plt.tight_layout()
+
+
+fig,ax = plt.subplots(1,K,figsize=(K*1.2,1.5),sharey=True)
+for i in range(K):
+    ax[i].plot(model.model.smu[0,perm[0,i]].detach(),'k',linewidth=1)
+ax[0].set_ylabel(r"$m$")
