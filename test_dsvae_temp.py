@@ -26,7 +26,7 @@ kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if args.cuda else
 nfft = 512
 dim_data = (nfft//2+1,args.n_time)
 
-args.num_sources = 1
+args.num_sources = 2
 args.compression = .5
 args.n_time = 257
 mixer = Mixer(n_sources=args.num_targets,average=args.average_mix)
@@ -65,7 +65,7 @@ kwds_model = dict(
     )
     
 model = DSVAE(kernel_size=kernel_size,stride=stride,padding=padding,separator_channels=64,separator_kernel_size=3,separator_layers=3,**kwds_model)
-# model = DCAE(kernel_size=kernel_size,stride=(2,2),padding=padding,**kwds_model)
+model = DCAE(kernel_size=kernel_size,stride=(2,2),padding=padding,**kwds_model)
 
 model.to(device)
 
