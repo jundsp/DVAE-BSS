@@ -48,8 +48,8 @@ class DSAE(nn.Module):
         self.likelihood = NormalLikelihood(scale_invariant=scale_invariant)
         self.criteria = nn.BCELoss(reduction='sum')
         self.register_parameter('variance',nn.Parameter(torch.ones(1)*.1,requires_grad=False))
-        self.register_parameter('smu',nn.Parameter(torch.zeros(1,num_sources,self.dimz)))
-        self.register_parameter('smu0',nn.Parameter(torch.zeros(1,num_sources,self.dimz)))
+        self.register_parameter('smu',nn.Parameter(torch.zeros(1,num_sources,self.dimz),requires_grad=True))
+        self.register_parameter('smu0',nn.Parameter(torch.zeros(1,num_sources,self.dimz),requires_grad=True))
         self.register_buffer('slogvar',torch.zeros(1,num_sources,self.dimz))
         self.register_buffer('slogvar0',torch.zeros(1,num_sources,self.dimz))
 
@@ -297,8 +297,8 @@ class DCAE(DSAE):
         self.likelihood = NormalLikelihood(scale_invariant=scale_invariant)
         self.criteria = nn.BCELoss(reduction='sum')
         self.register_parameter('variance',nn.Parameter(torch.ones(1)*variance,requires_grad=False))
-        self.register_parameter('smu',nn.Parameter(torch.zeros(1,num_sources,self.dimz)))
-        self.register_parameter('smu0',nn.Parameter(torch.zeros(1,num_sources,self.dimz)))
+        self.register_parameter('smu',nn.Parameter(torch.zeros(1,num_sources,self.dimz),requires_grad=True))
+        self.register_parameter('smu0',nn.Parameter(torch.zeros(1,num_sources,self.dimz),requires_grad=True))
         self.register_buffer('slogvar',torch.zeros(1,num_sources,self.dimz))
         self.register_buffer('slogvar0',torch.zeros(1,num_sources,self.dimz))
 
@@ -962,7 +962,7 @@ class TConvTranspose(nn.Module):
             mlist.append(ConvTranspose1dLayer(input_channels,layer_channels,kernel_size=kernel_size,stride=stride,padding=paddings[-1],dilation=dilations[-1],batchnorm=True,bias=bias))
             for ii in range(layers-3,-1,-1):
                 mlist.append(ConvTranspose1dLayer(layer_channels,layer_channels,kernel_size=kernel_size,stride=stride,padding=paddings[ii],dilation=dilations[ii],batchnorm=True,bias=bias))
-            mlist.append(ConvTranspose1dLayer(layer_channels,output_channels,kernel_size=kernel_size,stride=stride,padding=paddings[0],dilation=dilations[0],batchnorm=False,bias=bias))
+            mlist.append(ConvTranspose1dLayer(layer_channels,output_channels,kernel_size=kernel_size,stride=stride,padding=paddings[0],dilation=dilations[0],batchnorm=True,bias=bias))
 
         self.Network = nn.Sequential(*mlist)
 

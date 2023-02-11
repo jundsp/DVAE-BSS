@@ -11,7 +11,7 @@ import numpy as np
 from argparser import parser
 from datetime import datetime
 import matplotlib.pyplot as plt
-from utils.utils import torchToNumpy, mag2db
+from utils.utils import torchToNumpy, mag2db, load_state_dict
 
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
@@ -20,6 +20,7 @@ import time
 from datetime import datetime
 from subprocess import call
 import json
+from pathlib import Path
 
 def dict_average(input):
     avg = {}
@@ -318,6 +319,20 @@ if __name__ == "__main__":
             scale_invariant=True,
             layer_channels=tuple(args.cnn_channels),
             )
+    
+    if args.checkpoint is not None:
+        try:
+            path_checkpoint =((Path(root) / 'saves') / args.dataset)  / args.checkpoint
+            path_checkpoint = list(path_checkpoint.glob("*.pt"))[0]
+            model.load_state_dict(load_state_dict(path=path_checkpoint))
+            print("Loaded model from checkpoint!")
+            torch.manual_seed(123)
+        except Exception as e: 
+            print(e)
+            print("Failed to load checkpoint! Continuing with new model.")
+        print(args.checkpoint)
+
+    print(model)
         
     model.to(device)
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[current_device])

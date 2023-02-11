@@ -60,6 +60,7 @@ normalize = False
 nfft = 512
 averaged = False
 dim_data = nfft//2+1
+layer_channels=tuple(args.cnn_channels)
 
 test_set = NSYNTH(root=path_data)
 test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=False)
@@ -75,6 +76,7 @@ else:
     kernel_size=(3,3)
     stride=(2,2)
     padding=(1,1)
+    layer_channels = layer_channels + tuple([layer_channels[-1]])
 
 kwds_model = dict(
     dimx=dim_data,
@@ -85,7 +87,7 @@ kwds_model = dict(
     net_type=args.net_type,
     num_layers=args.num_layers,
     scale_invariant=True,
-    layer_channels=tuple(args.cnn_channels),
+    layer_channels=layer_channels,
     kernel_size=kernel_size,stride=stride,padding=padding,
     variance=args.variance,
     activate_final_layer=args.activate_final_layer,
