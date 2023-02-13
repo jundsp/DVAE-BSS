@@ -10,7 +10,7 @@ from torch.nn import functional as F
 import torchaudio
 
 class DSAE(nn.Module):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None, averaged_loss=True,rnn_type='lstm',inference_rnn=True):
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None, averaged_loss=True,rnn_type='lstm',inference_rnn=True,autoencoder=False):
         super(DSAE, self).__init__()
         self.dimx, self.dimz, self.dimh, self.dimg = dimx, dimz, dimh, dimg
         self.num_sources = num_sources
@@ -19,6 +19,8 @@ class DSAE(nn.Module):
         
         self.rnn_type = rnn_type
         self.inference_rnn = inference_rnn
+
+        self.autoencoder = autoencoder
 
         if rnn_type == 'gru':  
             self.gru_generate = nn.GRU(self.dimz,self.dimh,num_layers=self.num_layers,batch_first=True)
@@ -212,12 +214,12 @@ class DSAE(nn.Module):
 
     def forward(self, x, stochastic=True):
         mu_q, logvar_q, mu0_q, logvar0_q = self.encode(x)
-        if stochastic is True:
+        if (stochastic is True) and (self.autoencoder is False):
             z = reparameterize(mu_q,logvar_q)
             z0 = reparameterize(mu0_q,logvar0_q)
         else:
-            z = mu_q.clone()
-            z0 = mu0_q.clone()
+            z = mu_q
+            z0 = mu0_q
         mu_p, logvar_p = self.prior(z,z0)
         mu_s = self.decode(z)
         mu_s = mu_s.view(-1,self.num_sources,mu_s.size(-2),mu_s.size(-1))
@@ -243,8 +245,8 @@ class DSAE(nn.Module):
 
 
 class DCAE(DSAE):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None,kernel_size=(3,2),stride=(2,1),padding=(1,0),dilation=(1,1),variance=.1,activate_final_layer=True,kernel_size_separator=1,rnn_type='lstm',inference_rnn=True):
-        super(DCAE, self).__init__(dimx=dimx,dimz=dimz,rnn_type=rnn_type,inference_rnn=inference_rnn)
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None,kernel_size=(3,2),stride=(2,1),padding=(1,0),dilation=(1,1),variance=.1,activate_final_layer=True,kernel_size_separator=1,rnn_type='lstm',inference_rnn=True, autoencoder=False):
+        super(DCAE, self).__init__(dimx=dimx,dimz=dimz,rnn_type=rnn_type,inference_rnn=inference_rnn,autoencoder=autoencoder)
 
         if inference_rnn is False:
             dimg = dimz*2
@@ -592,9 +594,9 @@ class NormalLikelihood(nn.Module):
         if self.scale_invariant:
             for i in range(n):
                 d = (mu[i] * mu[i]).sum()
-                if d == 0.0: 
-                    d += 1.0
-                alpha[i] = (x[i] * mu[i]).sum() / d
+                if (torch.abs(d) < 1e-9) | torch.isinf(d) | torch.isnan(d): 
+                    d = torch.ones_like(d)
+                alpha[i] = (x[i] * mu[i]).sum() / (d+1e-6)
                 
         eps = x - mean*alpha
         return eps
@@ -625,7 +627,7 @@ class NormalLikelihood(nn.Module):
         else:
             eps = self.get_eps(x,mean)
 
-        return 0.5*torch.sum(var.log() + (eps).pow(2) / var)
+        return 0.5*torch.sum(var.log() + (eps).pow(2.0) / var)
 
 class LaplaceLikelihood(nn.Module):
     def __init__(self, variance=None, reduction='sum', scale_invariant=False):
@@ -662,11 +664,12 @@ class LaplaceLikelihood(nn.Module):
 
 
 class LossFunction(nn.Module):
-    def __init__(self,averaged=True,scale_invariant=True,complex_version=False,laplace=False):
+    def __init__(self,averaged=True,scale_invariant=True,complex_version=False,laplace=False,autoencoder=False):
         super(LossFunction,self).__init__()
 
         self.averaged = averaged  
         self.complex_version = complex_version
+        self.autoencoder = autoencoder
 
         if laplace:
             self.likelihood = LaplaceLikelihood(scale_invariant=scale_invariant)
@@ -688,9 +691,25 @@ class LossFunction(nn.Module):
         #         x = (x**2.0).sum(1).sqrt()
             
         # Si-SDR? scale the target... but it is the mixture.
-        ell = self.likelihood(x, mu_x, var=variance) 
+        ell = self.likelihood(x, mu_x, var=variance)
         kld = KLD(mu,logvar,prior_mean=mu_prior,prior_logvar=logvar_prior)
         kld += KLD(mu0,logvar0,prior_mean=smu0,prior_logvar=slogvar0)
+
+        if torch.any(torch.isnan(ell)):
+            print(ell)
+            print(x.sum())
+            print(mu_x.sum())
+            raise ValueError("likelihood is nan!")
+        if torch.any(torch.isnan(kld)):
+            print(kld)
+            print(mu)
+            print(logvar)
+            print(mu0)
+            raise ValueError("kld is nan!")
+        
+        if self.autoencoder:
+            kld = kld*0
+        
         
         return ell / N , kld / N
     
@@ -938,7 +957,7 @@ class TConvSeparator(nn.Module):
             mlist.append(Conv1dLayer(input_channels,layer_channels,kernel_size=kernel_size,stride=stride,padding=paddings[0],dilation=dilations[0],batchnorm=True,bias=bias))
             for ii in range(1,layers-1):
                 mlist.append(Conv1dLayer(layer_channels,layer_channels,kernel_size=kernel_size,stride=stride,padding=paddings[ii],dilation=dilations[ii],batchnorm=True,bias=bias))
-            mlist.append(Conv1dLayer(layer_channels,output_channels,kernel_size=kernel_size,stride=stride,padding=paddings[-1],dilation=dilations[-1],batchnorm=False,bias=bias))
+            mlist.append(Conv1dLayer(layer_channels,output_channels,kernel_size=kernel_size,stride=stride,padding=paddings[-1],dilation=dilations[-1],batchnorm=True,bias=bias))
 
         self.Network = nn.Sequential(*mlist)
 
@@ -1021,17 +1040,15 @@ class StridedDilatedEncoder(nn.Module):
         return self.Network(x)
     
 class DSVAE(DCAE):
-    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='strided', num_layers=1, scale_invariant=False, layer_channels=None, kernel_size=(3, 2), stride=(2, 1), padding=(1, 0), dilation=(1, 1), variance=0.1, activate_final_layer=True, separator_kernel_size=1,separator_layers=1,separator_dilation=1,separator_channels=32,rnn_type='gru',inference_rnn=True):
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='strided', num_layers=1, scale_invariant=False, layer_channels=None, kernel_size=(3, 2), stride=(2, 1), padding=(1, 0), dilation=(1, 1), variance=0.1, activate_final_layer=True, separator_kernel_size=1,separator_layers=1,separator_dilation=1,separator_channels=32,rnn_type='gru',inference_rnn=True,autoencoder=False):
         if layer_channels is None:
             layer_channels = (32,64,64,64)
 
-        super().__init__(dimx, dimz, dimh, dimg, chans, num_sources, net_type, num_layers, scale_invariant, layer_channels, kernel_size, stride, padding, dilation, variance, activate_final_layer, separator_kernel_size,rnn_type=rnn_type,inference_rnn=inference_rnn)
+        super().__init__(dimx, dimz, dimh, dimg, chans, num_sources, net_type, num_layers, scale_invariant, layer_channels, kernel_size, stride, padding, dilation, variance, activate_final_layer, separator_kernel_size,rnn_type=rnn_type,inference_rnn=inference_rnn,autoencoder=autoencoder)
 
         kwds_feature_conv = dict(kernel_size=kernel_size,stride=stride,padding=padding,dilation=dilation)
         self.Encoder = StridedDilatedEncoder(1,self.conv_channels,layer_channels=layer_channels,**kwds_feature_conv)
         self.Decoder = StridedDilatedDecoder(self.conv_channels,1,layer_channels=layer_channels,activate_final_layer=activate_final_layer,**kwds_feature_conv)
-
-        
 
         self.fc_encoder = TConvSeparator(input_channels=self.encoded_features,output_channels=self.dimg*self.num_sources,kernel_size=separator_kernel_size,stride=1,padding=1,dilation=1,layers=separator_layers,layer_channels=separator_channels,starting_layer=len(layer_channels))
 

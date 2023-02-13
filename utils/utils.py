@@ -65,7 +65,7 @@ def ideal_masks(stft_sources,alpha=1):
     Mask = S / model
     Y = X * Mask
     Y_binary = X * Mask.round()
-    phase_part = np.exp(1j*stft_mix.angle())
+    phase_part = torch.exp(1j*stft_mix.angle())
     Y = Y * phase_part
     Y_binary = Y_binary * phase_part
     return Y, Y_binary

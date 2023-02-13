@@ -166,7 +166,7 @@ def test(epoch,lossfun,test_loader,test_rank):
                 
         if test_rank == 0:
             print(('\t \t VALIDATE | Loss = {:4.6f}\t| ELL = {:4.6f}\t| KLD = {:4.6f}').format(info['loss'].item(), info['ell'].item(), info['kld'].item()))
-            save_result(data,output['recon_x'],output['recon_s'],filename=path_results+'/result.png',epoch=epoch)
+            save_result(data.cpu(),output['recon_x'].cpu(),output['recon_s'].cpu(),filename=path_results+'/result.png',epoch=epoch)
             # save_sample(N=output['mu_q'].size(1),filename=path_results+'/sample.png',epoch=epoch)
             save_info(info,category='Test',epoch=epoch)
     return info
@@ -299,6 +299,7 @@ if __name__ == "__main__":
                 activate_final_layer=args.activate_final_layer,
                 rnn_type=args.rnn_type,
                 inference_rnn=(not args.inference_rnn_off),
+                autoencoder=args.autoencoder,
                 )
                 
             if args.complex_version:
@@ -325,6 +326,8 @@ if __name__ == "__main__":
             path_checkpoint =((Path(root) / 'saves') / args.dataset)  / args.checkpoint
             path_checkpoint = list(path_checkpoint.glob("*.pt"))[0]
             model.load_state_dict(load_state_dict(path=path_checkpoint))
+            model.eval()
+            model.train()
             print("Loaded model from checkpoint!")
             torch.manual_seed(123)
         except Exception as e: 
@@ -337,7 +340,7 @@ if __name__ == "__main__":
     model.to(device)
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[current_device])
     
-    lossfun = LossFunction(complex_version=args.complex_version,laplace=args.laplace).to(device)
+    lossfun = LossFunction(complex_version=args.complex_version,laplace=args.laplace,autoencoder=args.autoencoder).to(device)
 
     optimizer = optim.AdamW(params=model.parameters(),lr=lr,weight_decay=2e-5)
             

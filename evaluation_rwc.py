@@ -76,7 +76,7 @@ else:
     kernel_size=(3,3)
     stride=(2,2)
     padding=(1,1)
-    layer_channels = layer_channels + tuple([layer_channels[-1]])
+    # layer_channels = layer_channels + tuple([layer_channels[-1]])
 
 kwds_model = dict(
     dimx=dim_data,
@@ -93,6 +93,7 @@ kwds_model = dict(
     activate_final_layer=args.activate_final_layer,
     rnn_type=args.rnn_type,
     inference_rnn=(not args.inference_rnn_off),
+    autoencoder=args.autoencoder
     )
                 
 if args.separator_version:
