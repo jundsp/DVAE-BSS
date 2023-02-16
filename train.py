@@ -329,7 +329,7 @@ if __name__ == "__main__":
             model.eval()
             model.train()
             print("Loaded model from checkpoint!")
-            torch.manual_seed(123)
+            torch.manual_seed(np.random.randint(0,1000))
         except Exception as e: 
             print(e)
             print("Failed to load checkpoint! Continuing with new model.")

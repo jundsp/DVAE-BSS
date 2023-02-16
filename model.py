@@ -572,8 +572,10 @@ class Transpose(nn.Module):
         return x.transpose(self.dim[0],self.dim[1])
 
 def KLD(mean_1, logvar_1, prior_mean=0.0, prior_logvar=0.0):
-    var_1 = logvar_1.exp()
-    var_2 = prior_logvar.exp()
+    var_1 = logvar_1.exp()+1e-8
+    var_2 = prior_logvar.exp()+1e-8
+    logvar_1 = var_1.log()
+    prior_logvar = var_2.log()
     return  -0.5 * torch.sum(1 + logvar_1 - prior_logvar - (var_1 + (mean_1 - prior_mean).pow(2)) / var_2)
 
 class NormalLikelihood(nn.Module):
@@ -594,8 +596,10 @@ class NormalLikelihood(nn.Module):
         if self.scale_invariant:
             for i in range(n):
                 d = (mu[i] * mu[i]).sum()
-                if (torch.abs(d) < 1e-9) | torch.isinf(d) | torch.isnan(d): 
-                    d = torch.ones_like(d)
+                if torch.isinf(d) | torch.isnan(d): 
+                    d = 1
+                if d < 1e-9:
+                    d = 1e-9
                 alpha[i] = (x[i] * mu[i]).sum() / (d+1e-6)
                 
         eps = x - mean*alpha
@@ -1051,8 +1055,8 @@ class DSVAE(DCAE):
         self.Decoder = StridedDilatedDecoder(self.conv_channels,1,layer_channels=layer_channels,activate_final_layer=activate_final_layer,**kwds_feature_conv)
 
         self.fc_encoder = TConvSeparator(input_channels=self.encoded_features,output_channels=self.dimg*self.num_sources,kernel_size=separator_kernel_size,stride=1,padding=1,dilation=1,layers=separator_layers,layer_channels=separator_channels,starting_layer=len(layer_channels))
-
-        self.fc_decoder = TConvTranspose(input_channels=self.dimz,output_channels=self.encoded_features,kernel_size=separator_kernel_size,stride=1,padding=1,dilation=1,layers=separator_layers,layer_channels=separator_channels,starting_layer=len(layer_channels))
+        
+        # self.fc_decoder = TConvTranspose(input_channels=self.dimz,output_channels=self.encoded_features,kernel_size=separator_kernel_size,stride=1,padding=1,dilation=1,layers=separator_layers,layer_channels=separator_channels,starting_layer=len(layer_channels))
 
 
 
