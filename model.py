@@ -889,6 +889,10 @@ class Separator(nn.Module):
 
         if self.mask:
             S_hat = S_hat * (Y/Y_hat).unsqueeze(1)
+        else:
+            for k in range(S_hat.shape[0]):
+                alpha = (Y[k]*Y_hat[k]).sum() / Y_hat[k].pow(2).sum()
+                S_hat[k] =  S_hat[k] * alpha
         
         S_hat_stft = S_hat * torch.exp(1j*Y_stft.angle()).unsqueeze(1)
 

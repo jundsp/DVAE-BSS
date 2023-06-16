@@ -62,7 +62,7 @@ averaged = False
 dim_data = nfft//2+1
 layer_channels=tuple(args.cnn_channels)
 
-test_set = NSYNTH(root=path_data)
+test_set = RWC(root=path_data)
 test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size,shuffle=False)
 
 # LOAD MODEL

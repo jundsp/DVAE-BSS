@@ -10,16 +10,11 @@ import json
 import torch
 import numpy as np
 from pathlib import Path
-plt.rcParams['figure.dpi'] = 150
-plt.rcParams.update({
-    "text.usetex": True,
-    "font.family": "Times",
-    "axes.titlesize": "medium",
-    "axes.labelsize": "medium",
-})
-# sns.set()
 
-root = Path("/Users/julian/Documents/Code/Python/Results/SVAE/NSYNTH_test/sources/")
+plt.style.use('gibbs.mplstyles.latex')
+
+
+root = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC_test/sources/")
 output_directory = root / "results"
 os.makedirs(output_directory,exist_ok=True)
   
@@ -39,6 +34,8 @@ for ii,cc in enumerate(json_name):
     df['sources'] = round(js['num_sources'],1)
     df['targets'] = round(js['num_targets'],1)
 
+    df = df[(df['instrument1'] != 'glockenspiel') & (df['instrument2'] != 'glockenspiel')]
+
     DF.append(df)
 #%%
 df = pd.concat(DF)
@@ -48,7 +45,7 @@ df.rename(columns={'sdr': 'SI-SDR','sir': 'SIR','sar': 'SAR'},inplace=True)
 dfm = df.melt(['sources','variance','index','place'], var_name='metric', value_name='vals')
 
 #%%
-fig,ax = plt.subplots(1,3,figsize=(10,3))
+fig,ax = plt.subplots(1,3,figsize=(8.5,3))
 PROPS = {
     'boxprops':{'facecolor':'none', 'edgecolor':'grey'},
     'medianprops':{'color':'blue'},
@@ -63,7 +60,7 @@ plt.tight_layout()
 plt.savefig(output_directory / "boxplot_nofill.pdf")
 
 #%%
-fig,ax = plt.subplots(1,3,figsize=(10,3))
+fig,ax = plt.subplots(1,3,figsize=(8.5,3))
 kwds_box = dict(showfliers=False,whis=0)
 sns.boxplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],**kwds_box)
 sns.boxplot(data=df,x=compare_along,y='SIR',ax=ax[1],**kwds_box)
@@ -72,7 +69,7 @@ plt.tight_layout()
 plt.savefig(output_directory / "boxplot.pdf")
 
 # %%
-fig,ax = plt.subplots(1,3,figsize=(10,3))
+fig,ax = plt.subplots(1,3,figsize=(8.5,3))
 sns.boxplot(data=df,hue=compare_along,y='SI-SDR',ax=ax[0],showfliers=False,x='place')
 sns.boxplot(data=df,hue=compare_along,y='SIR',ax=ax[1],showfliers=False,x='place')
 sns.boxplot(data=df,hue=compare_along,y='SAR',ax=ax[2],showfliers=False,x='place')
@@ -84,7 +81,7 @@ plt.tight_layout()
 plt.savefig(output_directory / "boxplot_estims.pdf")
 
 # %%
-fig,ax = plt.subplots(1,3,figsize=(10,3))
+fig,ax = plt.subplots(1,3,figsize=(8.5,3))
 sns.boxplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],showfliers=False,hue='place')
 sns.boxplot(data=df,x=compare_along,y='SIR',ax=ax[1],showfliers=False,hue='place')
 sns.boxplot(data=df,x=compare_along,y='SAR',ax=ax[2],showfliers=False,hue='place')
@@ -96,7 +93,7 @@ plt.tight_layout()
 plt.savefig(output_directory / "boxplot_variance.pdf")
 
 # %%
-fig,ax = plt.subplots(1,3,figsize=(10,3))
+fig,ax = plt.subplots(1,3,figsize=(8.5,3))
 kwds_line = dict(estimator='mean',errorbar=('sd', .5),color='k')
 sns.pointplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],**kwds_line)
 sns.pointplot(data=df,x=compare_along,y='SIR',ax=ax[1],**kwds_line)
@@ -107,7 +104,7 @@ plt.savefig(output_directory / "lineplot_sd.pdf")
 
 
 #%%
-fig,ax = plt.subplots(1,3,figsize=(10,3))
+fig,ax = plt.subplots(1,3,figsize=(8.5,3))
 kwds_line = dict(estimator='median',hue='place')
 sns.pointplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],**kwds_line)
 sns.pointplot(data=df,x=compare_along,y='SIR',ax=ax[1],**kwds_line)
@@ -123,6 +120,19 @@ plt.savefig(output_directory / "lineplot_ci.pdf")
 
 df5 = df[df['sources']==6]
 
+
+order = df5.groupby(by=["instrument1"])["SI-SDR"].median().sort_values().index
+
+plt.figure(figsize=(2.5,3))
+sns.boxplot(data=df5,x='instrument1',y='SI-SDR',showfliers=False,order=order,whis=0,notch=True)
+plt.xticks(rotation=90)
+plt.ylim(0)
+plt.xlabel(None)
+plt.tight_layout()
+plt.savefig(output_directory/'boxplot_instrument_sisdr.pdf',bbox_inches='tight')
+
+#%%
+
 i1 = df5['instrument1'].values
 i2 = df5['instrument2'].values
 mix = np.stack([i1,i2],-1)
@@ -135,10 +145,13 @@ inds = mixi.argsort(-1)
 for i in range(inds.shape[0]):
     mix[i] = mix[i,inds[i]]
 
+#%%
 df5['instrument1'] = mix[:,0]
 df5['instrument2'] = mix[:,1]
+df5 = df5.drop(['instrument'],axis=1)
 df_instr = df5.groupby(['instrument1','instrument2']).mean().reset_index()
 mtx = df_instr.pivot(index='instrument2', columns='instrument1', values='SI-SDR')
+
 # %%
 plt.figure(figsize=(4,3))
 ax = sns.heatmap(data=mtx,square=True,annot=True,cmap='plasma',fmt="2.0f",cbar_kws={'label': 'SI-SDR'})
@@ -176,4 +189,5 @@ plt.ylim(0,20)
 plt.xticks(np.arange(0,5*12,12))
 plt.tight_layout()
 plt.savefig(output_directory/"pitch_sdr.pdf")
+
 # %%

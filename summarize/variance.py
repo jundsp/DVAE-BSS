@@ -8,30 +8,25 @@ import glob
 import pandas as pd
 import json
 import torch
-plt.rcParams['figure.dpi'] = 150
-plt.rcParams.update({
-    "text.usetex": True,
-    "font.family": "Times",
-    "axes.titlesize": "medium",
-    "axes.labelsize": "medium",
-})
+from pathlib import Path
+
+plt.style.use('gibbs.mplstyles.latex')
+
 # sns.set()
 
-root = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/variance/"
-output_directory = root + "/results"
+root = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC_test/variance/")
+output_directory = root / "results"
 os.makedirs(output_directory,exist_ok=True)
   
 compare_along = "variance"
 # %%
-csv_name = glob.glob(root + "*/*/*/bss.csv")
+json_name = root.glob("*/results.json")
 DF = []
-for ii,cc in enumerate(csv_name):
-    df = pd.read_csv(cc)
-    df.rename(columns={'Source': 'estimate'},inplace=True)
-    df['estimate'] +=1
+for ii,cc in enumerate(json_name):
+    df = pd.read_json(cc,orient="index")
+    df['place'] = 2-df['place']
 
-
-    fname = os.path.dirname(cc) + "/configuration.txt"
+    fname = cc.parents[0] / "configuration.txt"
     with open(fname) as f:
         data = f.read()
     js = json.loads(data)
@@ -39,16 +34,19 @@ for ii,cc in enumerate(csv_name):
     df['sources'] = round(js['num_sources'],1)
     df['targets'] = round(js['num_targets'],1)
 
+    df = df[(df['instrument1'] != 'glockenspiel') & (df['instrument2'] != 'glockenspiel')]
+
     DF.append(df)
+
 #%%
 df = pd.concat(DF)
 df = df.reset_index()
-df.rename(columns={'SDR': 'SI-SDR'},inplace=True)
+df.rename(columns={'sdr': 'SI-SDR','sir': 'SIR','sar': 'SAR'},inplace=True)
 
-dfm = df.melt(['sources','variance','index','estimate'], var_name='metric', value_name='vals')
+dfm = df.melt(['sources','variance','index','place'], var_name='metric', value_name='vals')
 
 #%%
-fig,ax = plt.subplots(1,3,figsize=(10,3))
+fig,ax = plt.subplots(1,3,figsize=(8.5,3))
 PROPS = {
     'boxprops':{'facecolor':'none', 'edgecolor':'grey'},
     'medianprops':{'color':'blue'},
@@ -60,58 +58,62 @@ sns.boxplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],**kwds_box)
 sns.boxplot(data=df,x=compare_along,y='SIR',ax=ax[1],**kwds_box)
 sns.boxplot(data=df,x=compare_along,y='SAR',ax=ax[2],**kwds_box)
 plt.tight_layout()
-plt.savefig(output_directory + "/boxplot_nofill.pdf")
+plt.savefig(output_directory / "boxplot_nofill.pdf",bbox_inches='tight')
+
 
 #%%
-fig,ax = plt.subplots(1,3,figsize=(10,3))
-kwds_box = dict(showfliers=False)
+fig,ax = plt.subplots(1,3,figsize=(8.5,3))
+kwds_box = dict(showfliers=False,whis=0)
 sns.boxplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],**kwds_box)
 sns.boxplot(data=df,x=compare_along,y='SIR',ax=ax[1],**kwds_box)
 sns.boxplot(data=df,x=compare_along,y='SAR',ax=ax[2],**kwds_box)
 plt.tight_layout()
-plt.savefig(output_directory + "/boxplot.pdf")
+plt.savefig(output_directory / "boxplot.pdf",bbox_inches='tight')
 
 # %%
-fig,ax = plt.subplots(1,3,figsize=(10,3))
-sns.boxplot(data=df,hue=compare_along,y='SI-SDR',ax=ax[0],showfliers=False,x='estimate')
-sns.boxplot(data=df,hue=compare_along,y='SIR',ax=ax[1],showfliers=False,x='estimate')
-sns.boxplot(data=df,hue=compare_along,y='SAR',ax=ax[2],showfliers=False,x='estimate')
+fig,ax = plt.subplots(1,3,figsize=(8.5,3))
+sns.boxplot(data=df,hue=compare_along,y='SI-SDR',ax=ax[0],showfliers=False,x='place')
+sns.boxplot(data=df,hue=compare_along,y='SIR',ax=ax[1],showfliers=False,x='place')
+sns.boxplot(data=df,hue=compare_along,y='SAR',ax=ax[2],showfliers=False,x='place')
 ax[0].legend([],[], frameon=False)
 ax[1].legend([],[], frameon=False)
 
 plt.legend(bbox_to_anchor=(1.1, 1), loc='upper left')
 plt.tight_layout()
-plt.savefig(output_directory + "/boxplot_estims.pdf")
+plt.savefig(output_directory / "boxplot_estims.pdf",bbox_inches='tight')
 
 # %%
-fig,ax = plt.subplots(1,3,figsize=(10,3))
-sns.boxplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],showfliers=False,hue='estimate')
-sns.boxplot(data=df,x=compare_along,y='SIR',ax=ax[1],showfliers=False,hue='estimate')
-sns.boxplot(data=df,x=compare_along,y='SAR',ax=ax[2],showfliers=False,hue='estimate')
+fig,ax = plt.subplots(1,3,figsize=(8.5,3))
+sns.boxplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],showfliers=False,hue='place')
+sns.boxplot(data=df,x=compare_along,y='SIR',ax=ax[1],showfliers=False,hue='place')
+sns.boxplot(data=df,x=compare_along,y='SAR',ax=ax[2],showfliers=False,hue='place')
 ax[0].legend([],[], frameon=False)
 ax[1].legend([],[], frameon=False)
 
 plt.legend(bbox_to_anchor=(1.1, 1), loc='upper left')
 plt.tight_layout()
-plt.savefig(output_directory + "/boxplot_variance.pdf")
+plt.savefig(output_directory / "boxplot_variance.pdf",bbox_inches='tight')
 
 # %%
-fig,ax = plt.subplots(1,3,figsize=(10,3))
+fig,ax = plt.subplots(1,3,figsize=(8.5,3))
 kwds_line = dict(estimator='mean',errorbar=('sd', .5),color='k')
 sns.pointplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],**kwds_line)
 sns.pointplot(data=df,x=compare_along,y='SIR',ax=ax[1],**kwds_line)
 sns.pointplot(data=df,x=compare_along,y='SAR',ax=ax[2],**kwds_line)
 plt.tight_layout()
 ax[1].set_title('.5 Standard Deviation')
-plt.savefig(output_directory + "/lineplot_sd.pdf")
+plt.savefig(output_directory / "lineplot_sd.pdf",bbox_inches='tight')
 
 
 #%%
-fig,ax = plt.subplots(1,3,figsize=(10,3))
-kwds_line = dict(estimator='median',errorbar=('ci', 95),hue='sources')
+fig,ax = plt.subplots(1,3,figsize=(8.5,3))
+kwds_line = dict(estimator='median',hue='place')
 sns.pointplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],**kwds_line)
 sns.pointplot(data=df,x=compare_along,y='SIR',ax=ax[1],**kwds_line)
 sns.pointplot(data=df,x=compare_along,y='SAR',ax=ax[2],**kwds_line)
 # ax[1].set_title(' 95% confidence interval')
+for _ax in ax:
+    # _ax.set_xlim(2,6)
+    _ax.set_xlabel(r'model sources $K$')
 plt.tight_layout()
-plt.savefig(output_directory + "/lineplot_ci.pdf")
+plt.savefig(output_directory / "lineplot_ci.pdf",bbox_inches='tight')

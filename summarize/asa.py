@@ -11,13 +11,7 @@ import sines
 from pathlib import Path
 import json
 
-plt.rcParams['figure.dpi'] = 300
-plt.rcParams.update({
-    "text.usetex": True,
-    "font.family": "Times",
-    "axes.titlesize": "medium",
-    "axes.labelsize": "medium",
-})
+plt.style.use('gibbs.mplstyles.latex')
 
 path = Path("/Users/julian/Documents/Code/Python/Results/SVAE/ASA")
 fname = path / 'results.json'
@@ -30,7 +24,7 @@ df.rename(columns={'sdr': 'SI-SDR', 'sir': 'SIR', 'sar': 'SAR'},inplace=True)
 
 #%%
 plt.figure(figsize=(3.5,2.5))
-sns.boxplot(data=df,x='SI-SDR',y='physics',showfliers=False,whis=0)
+sns.boxplot(data=df,x='SI-SDR',y='physics',showfliers=False,whis=0,notch=True)
 plt.ylabel(None)
 plt.tight_layout()
 plt.savefig(path_out / "physics_sdr.png")
@@ -55,7 +49,8 @@ plt.tight_layout()
 plt.savefig(path_out / "semitone_sdr.png")
 
 # %%
-df_mean = df.groupby(['delta_semitone','delta_time']).mean().reset_index()
+df_mean = df.filter(['delta_semitone','delta_time','SI-SDR','SIR','SAR'])
+df_mean = df_mean.groupby(['delta_semitone','delta_time']).mean().reset_index()
 
 #* Plot also for sustain vs vibrato, maybe the time diff doesn't matter as much?
 # %%
