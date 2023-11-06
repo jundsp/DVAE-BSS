@@ -508,10 +508,12 @@ class Mixer(torch.nn.Module):
         self,
         n_sources=1,
         average=False,
+        random_num=False
     ):
         super(Mixer,self).__init__()
         self.n_sources = n_sources
         self.average = average
+        self.random_num = random_num
 
     def forward(self, waveform: torch.Tensor) -> torch.Tensor:
         if self.n_sources == 1:
@@ -524,6 +526,8 @@ class Mixer(torch.nn.Module):
                 sources.append(waveform[perms])
                 perms = torch.roll(perms,1)
             sources = torch.stack(sources,1)
+            if self.random_num:
+                sources[:,1:] = sources[:,1:] * torch.randint(0,2,(sources.shape[0],sources.shape[1]-1,1))
             if self.average:
                 sources /= sources.shape[1]
             mix = sources.sum(1)

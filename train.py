@@ -42,11 +42,11 @@ def save_result_grid(x,x_hat,s_hat,filename='result.png',epoch=1):
 def save_result(x,x_hat,s_hat,filename='result.png',epoch=1):    
     # Mask estimate
     if x.ndim == 4:
-        x = (x**2.0).sum(1).sqrt()
+        x = complex_to_mag(x,1)
     if x_hat.ndim == 4:
-        x_hat = (x_hat**2.0).sum(1).sqrt()
+        x_hat = complex_to_mag(x_hat,1)
     if s_hat.ndim == 5:
-        s_hat = (s_hat**2.0).sum(2).sqrt()
+        s_hat = complex_to_mag(s_hat,2)
         
     M = create_masks(x,s_hat)
         
@@ -215,7 +215,7 @@ if __name__ == "__main__":
     nfft = 512
     dim_data = (nfft//2+1,args.n_time)
 
-    mixer = Mixer(n_sources=args.num_targets,average=args.average_mix)
+    mixer = Mixer(n_sources=args.num_targets,average=args.average_mix,random_num=True)
     pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time,output_realimag=args.complex_version)
     # mixer = mixer.to(device)
     pipeline = pipeline.to(device)
@@ -303,7 +303,7 @@ if __name__ == "__main__":
                 )
                 
             if args.complex_version:
-                model = SVAE(mag_output=False,**kwds_model)
+                model = SVAE(out_type="activated",**kwds_model)
             elif args.separator_version:
                 model = DSVAE(separator_layers=args.separator_layers,separator_kernel_size=args.separator_kernel_size,separator_channels=args.separator_channels,**kwds_model)
             else:
@@ -340,7 +340,7 @@ if __name__ == "__main__":
     model.to(device)
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[current_device])
     
-    lossfun = LossFunction(complex_version=args.complex_version,laplace=args.laplace,autoencoder=args.autoencoder).to(device)
+    lossfun = LossFunction(complex_version=args.complex_version,laplace=args.laplace,autoencoder=args.autoencoder,scale_invariant=True).to(device)
 
     optimizer = optim.AdamW(params=model.parameters(),lr=lr,weight_decay=2e-5)
             

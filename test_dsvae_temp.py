@@ -12,6 +12,8 @@ import numpy as np
 from argparser import parser
 import time
 
+
+
 import matplotlib.pyplot as plt
 
 args = parser.parse_args(args=[])
@@ -26,11 +28,11 @@ kwargs = {'num_workers': args.num_workers, 'pin_memory': True} if args.cuda else
 nfft = 512
 dim_data = (nfft//2+1,args.n_time)
 
-args.num_sources = 2
+args.num_sources = 3
 args.compression = .5
 args.n_time = 257
 mixer = Mixer(n_sources=args.num_targets,average=args.average_mix)
-pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time)
+pipeline = AudioPipeline(n_fft=nfft,hop_length=128,compression=args.compression,n_time=args.n_time,output_realimag=True)
 pipeline = pipeline.to(device)
 
 dimx = dim_data[0]
@@ -66,10 +68,11 @@ kwds_model = dict(
     
 model = DSVAE(kernel_size=kernel_size,stride=stride,padding=padding,separator_channels=64,separator_kernel_size=3,separator_layers=3,**kwds_model)
 model = DCAE(kernel_size=kernel_size,stride=(2,2),padding=padding,**kwds_model)
+model = SVAE(num_sources=args.num_sources,dimx=257,dimz=16,dimh=256,kernel_size=(3,3),stride=(2,2),padding=(1,1),layer_channels=tuple(args.cnn_channels),activate_final_layer=True,out_type="raw")
 
 model.to(device)
 
-lossfun = LossFunction(complex_version=False).to(device)
+lossfun = LossFunction(complex_version=True,scale_invariant=False).to(device)
 
 optimizer = optim.AdamW(params=model.parameters(),lr=lr,weight_decay=2e-5)
 
@@ -89,7 +92,7 @@ for epoch in range(1,200):
     data = pipeline(audio)
     output = model(data)
 
-    ell, kld = lossfun(data,output)
+    ell, kld = lossfun(data, output)
     loss = ell + kld
     
     optimizer.zero_grad()
@@ -103,9 +106,9 @@ kwds = dict(aspect='auto',origin='lower',cmap='jet',interpolation='none')
 
 #%%
 
-output_mag = output['recon_x'].detach()
-data_mag = data
-source_mags = output['recon_s'].detach()
+output_mag = complex_to_mag(output['recon_x'],1).detach()
+data_mag = complex_to_mag(data,1)
+source_mags = complex_to_mag(output['recon_s'],2).detach()
 
 plt.subplot(211)
 plt.imshow(mag2db(data_mag[0]),**kwds)
@@ -123,5 +126,9 @@ for k in range(args.num_sources):
 with torch.no_grad():
     x,z,h=model.sample(N=512)
 
-plt.imshow(x[0,0],aspect='auto')
+plt.imshow((x**2).sum(1)[0]**.5,aspect='auto')
+
+# %%
+recon_x_comp = torch.complex(output['recon_s'][:,:,0],output['recon_s'][:,:,1])
+recon_x_audio = pipeline.invert(stft=recon_x_comp)
 # %%

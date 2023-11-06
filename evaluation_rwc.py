@@ -19,10 +19,10 @@ import json
 
 args = parser.parse_args()
 
-# args.model_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/dilated/"
-# args.output_directory = "/Users/julian/Documents/Code/Python/Results/SVAE/RWC/dilated"
-# args.data_directory = "/Volumes/JulianSSD/data/NSYNTH_test"
-# args.job_id = "230208-13605818"
+args.model_directory = "/home/jneri/projects/def-depalle/jneri/output/SVAE/saves/RWC/"
+args.output_directory = "/home/jneri/projects/def-depalle/jneri/evaluation/SVAE/RWC_test/"
+args.data_directory = "/home/jneri/projects/def-depalle/jneri/data/RWC_test"
+args.job_id = "231017-22161497"
 path_data = Path(args.data_directory) 
 path_model = Path(args.model_directory) / args.job_id
 path_out = Path(args.output_directory) / args.job_id

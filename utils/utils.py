@@ -16,6 +16,8 @@ def mag2db(x):
 def torchToNumpy(x):
     return x.detach().cpu().numpy()
     
+def complex_to_mag(x:torch.tensor,axis=1):
+    return (x ** 2).sum(axis) ** .5
 
 def optimal_permute(y,x):
     n = x.size(0)
