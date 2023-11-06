@@ -16,6 +16,32 @@ def mag2db(x):
 def torchToNumpy(x):
     return x.detach().cpu().numpy()
     
+def complex_to_mag(x:torch.tensor,axis=1):
+    return (x ** 2).sum(axis) ** .5
+
+def complex_to_phase(x:torch.tensor,axis=1):
+    return .001*unwrap(torch.atan2(torch.select(x,axis,0),torch.select(x,axis,1)))
+
+def complex_to_polar(x:torch.tensor,axis=1):
+    return torch.stack([complex_to_mag(x,axis),complex_to_phase(x,axis)],axis)
+def complex_to_polar_activated(x:torch.tensor,axis=1):
+    return torch.stack([x[:,0],unwrap(x[:,1])],axis)
+
+def unwrap(phi, dim=-1):
+    assert dim is -1, "unwrap only supports dim=-1 for now"
+    dphi = diff(phi, same_size=True)
+    dphi_m = ((dphi+np.pi) % (2 * np.pi)) - np.pi
+    dphi_m[(dphi_m==-np.pi)&(dphi>0)] = np.pi
+    phi_adj = dphi_m-dphi
+    phi_adj[dphi.abs()<np.pi] = 0
+    return phi + phi_adj.cumsum(dim)
+
+def diff(x, dim=-1, same_size=False):
+    assert dim is -1, "diff only supports dim=-1 for now"
+    if same_size:
+        return F.pad(x[...,1:]-x[...,:-1], (1,0))
+    else:
+        return x[...,1:]-x[...,:-1]
 
 def optimal_permute(y,x):
     n = x.size(0)

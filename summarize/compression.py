@@ -71,21 +71,40 @@ dfm = df.melt(['sources','compression','index','place'], var_name='metric', valu
 # plt.savefig(output_directory + "/spectrum_averages.pdf")
 # plt.savefig(output_directory + "/spectrum_averages.png",dpi=200)
 #%%
-#%%
-fig,ax = plt.subplots(1,3,figsize=(8.5,3))
+fig,ax = plt.subplots(1,3,figsize=(7,2.5))
 PROPS = {
     'boxprops':{'facecolor':'none', 'edgecolor':'grey'},
     'medianprops':{'color':'blue'},
     'whiskerprops':{'color':'blue'},
-    'capprops':{'color':'black'}
+    'capprops':{'color':'black'},
 }
 kwds_box = dict(showcaps=False,showfliers=False,whis=0,**PROPS)
 sns.boxplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],**kwds_box)
 sns.boxplot(data=df,x=compare_along,y='SIR',ax=ax[1],**kwds_box)
 sns.boxplot(data=df,x=compare_along,y='SAR',ax=ax[2],**kwds_box)
+
+lims = []
+for _ax in ax:
+    _ax.set_xlabel(r"compression $c$")
+    lims.append(_ax.get_ylim())
+    _ax.set_xticklabels(_ax.get_xticklabels(), rotation = 90)
+
+
+# lims = np.array(lims)
+# max_range = np.diff(lims).max()/2
+# for _ax in ax:
+#     lims = np.array(_ax.get_ylim())
+#     mean = lims.mean()
+#     lims[0] = mean - max_range
+#     lims[1] = mean + max_range
+#     _ax.set_ylim(*lims)
+#     _ax.set_ylabel(None)
+# ax[0].set_title('SI-SDR')
+# ax[1].set_title('SIR')
+# ax[2].set_title('SAR')
 plt.tight_layout()
 plt.savefig(output_directory / "boxplot_nofill.pdf",bbox_inches='tight')
-
+# plt.close()
 
 #%%
 fig,ax = plt.subplots(1,3,figsize=(8.5,3))

@@ -261,7 +261,7 @@ class AuditoryStreams(Dataset):
     def __init__(self,root: str, audio_ext=".wav"):
 
         self._path = Path(root)
-        self._audio_dir = self._path / 'mix'
+        self._audio_dir = self._path / 'audio'
         self._audio_ext = audio_ext
 
         self._info = pd.read_json(self._path / 'mix.json',orient='index')
@@ -282,7 +282,7 @@ class AuditoryStreams(Dataset):
         audio_mix, _ = torchaudio.load(mix_filepath)
         audio_stems, _ = torchaudio.load(stems_filepath)
         dict_out = dict(mix=audio_mix,stems=audio_stems)
-        for i in ['delta_time','delta_semitone','physics1','physics2']:
+        for i in ['delta_time','delta_semitone','instrument1','instrument2']:
             dict_out[i] = info[i]
         return dict_out
 
@@ -508,10 +508,12 @@ class Mixer(torch.nn.Module):
         self,
         n_sources=1,
         average=False,
+        random_num=False
     ):
         super(Mixer,self).__init__()
         self.n_sources = n_sources
         self.average = average
+        self.random_num = random_num
 
     def forward(self, waveform: torch.Tensor) -> torch.Tensor:
         if self.n_sources == 1:
@@ -524,6 +526,8 @@ class Mixer(torch.nn.Module):
                 sources.append(waveform[perms])
                 perms = torch.roll(perms,1)
             sources = torch.stack(sources,1)
+            if self.random_num:
+                sources[:,1:] = sources[:,1:] * torch.randint(0,2,(sources.shape[0],sources.shape[1]-1,1))
             if self.average:
                 sources /= sources.shape[1]
             mix = sources.sum(1)

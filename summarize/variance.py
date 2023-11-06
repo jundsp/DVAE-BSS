@@ -19,6 +19,7 @@ output_directory = root / "results"
 os.makedirs(output_directory,exist_ok=True)
   
 compare_along = "variance"
+
 # %%
 json_name = root.glob("*/results.json")
 DF = []
@@ -46,7 +47,7 @@ df.rename(columns={'sdr': 'SI-SDR','sir': 'SIR','sar': 'SAR'},inplace=True)
 dfm = df.melt(['sources','variance','index','place'], var_name='metric', value_name='vals')
 
 #%%
-fig,ax = plt.subplots(1,3,figsize=(8.5,3))
+fig,ax = plt.subplots(1,3,figsize=(7,2.5))
 PROPS = {
     'boxprops':{'facecolor':'none', 'edgecolor':'grey'},
     'medianprops':{'color':'blue'},
@@ -57,6 +58,14 @@ kwds_box = dict(showcaps=False,showfliers=False,whis=0,**PROPS)
 sns.boxplot(data=df,x=compare_along,y='SI-SDR',ax=ax[0],**kwds_box)
 sns.boxplot(data=df,x=compare_along,y='SIR',ax=ax[1],**kwds_box)
 sns.boxplot(data=df,x=compare_along,y='SAR',ax=ax[2],**kwds_box)
+
+lims = []
+for _ax in ax:
+    _ax.set_xlabel(r"variance $\sigma^2$")
+    _ax.set_xticklabels(_ax.get_xticklabels(), rotation = 45)
+    lims.append(_ax.get_ylim())
+    _ax.set_ylim(max(0,_ax.get_ylim()[0]))
+
 plt.tight_layout()
 plt.savefig(output_directory / "boxplot_nofill.pdf",bbox_inches='tight')
 

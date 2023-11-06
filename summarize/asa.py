@@ -13,14 +13,18 @@ import json
 
 plt.style.use('gibbs.mplstyles.latex')
 
-path = Path("/Users/julian/Documents/Code/Python/Results/SVAE/ASA")
+path = Path("/Volumes/JulianSSD/research/svae-bss/evaluation/TwoNote/230214-13754627")
 fname = path / 'results.json'
 path_out = path / "imgs"
 os.makedirs(path_out,exist_ok=True)
 
 df = pd.read_json(fname,orient='index')
 
-df.rename(columns={'sdr': 'SI-SDR', 'sir': 'SIR', 'sar': 'SAR'},inplace=True)
+df.rename(columns={'sdr': 'SI-SDR', 'sir': 'SIR', 'sar': 'SAR','instrument1':'physics1','instrument2':'physics2'},inplace=True)
+df.replace({'forced_vibrato':'vibrato'},inplace=True)
+df.replace({'forced':'sustain'},inplace=True)
+df = df.drop(['instrument'],axis=1)
+df['physics'] = df['physics1'] + "+" + df['physics2']
 
 #%%
 plt.figure(figsize=(3.5,2.5))
