@@ -108,7 +108,12 @@ kwds = dict(aspect='auto',origin='lower',cmap='jet',interpolation='none')
 
 output_mag = complex_to_mag(output['recon_x'],1).detach()
 data_mag = complex_to_mag(data,1)
+
 source_mags = complex_to_mag(output['recon_s'],2).detach()
+
+alpha = make_invariant(data_mag, output_mag)
+output_mag *= alpha
+source_mags *= alpha
 
 plt.subplot(211)
 plt.imshow(mag2db(data_mag[0]),**kwds)

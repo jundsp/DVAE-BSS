@@ -19,21 +19,38 @@ plt.rcParams.update({
     "axes.labelsize": "medium",
 })
 
-path = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC_test/sources/230122-13058067")
-fname = path / 'results.json'
-path_out = path / "imgs"
-os.makedirs(path_out,exist_ok=True)
+
+path = Path("/Users/julian/Documents/Code/output/svae/baselines/TwoNote")
+
+suffix = "_ICA"
+fname = path / 'results{}.json'.format(suffix)
 
 df = pd.read_json(fname,orient='index')
 
 df.rename(columns={'sdr': 'SI-SDR', 'sir': 'SIR', 'sar': 'SAR'},inplace=True)
 
+df_bss = {}
+for i in ['SI-SDR','SIR','SAR']:
+    df_bss[i] = df[i].median()
+pd.DataFrame(df_bss,index=["DVAE"]).T.to_latex(path / "medians{}.tex".format(suffix))
+
 #%%
+path_out = path / "imgs"
+os.makedirs(path_out,exist_ok=True)
+
 plt.figure(figsize=(3.5,2.5))
 sns.boxplot(data=df,x='place',y='SI-SDR',showfliers=False,whis=0)
 plt.ylabel(None)
 plt.tight_layout()
 plt.savefig(path_out / "place_sdr.png")
+
+#%%
+plt.figure(figsize=(3.5,2.5))
+sns.violinplot(data=df,x='SI-SDR',facecolor="none")
+plt.xlim(-20,40)
+plt.tight_layout()
+plt.savefig(path_out / "violin_sisdr.png")
+
 #%%
 plt.figure(figsize=(4,2.5))
 ax = sns.lineplot(data=df,x='delta_time',y='SI-SDR',hue='instrument1')

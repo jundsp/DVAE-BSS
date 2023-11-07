@@ -28,8 +28,8 @@ T = 8
 L = int(T*sr)
 audio = torch.zeros(1,L)
 audio[:,sr::sr//2] = 1
-dataset = AuditoryStreams(root="/Users/julian/Documents/Code/data/dataset_harmonic/")
-idx = dataset._info[(dataset._info['physics1']=='forced') & (dataset._info['physics2']=='forced_vibrato') & (dataset._info['delta_time']==.755) & (dataset._info['delta_semitone']==9)].index.item()
+dataset = AuditoryStreams(root="/Users/julian/Documents/Code/data/TwoNote/")
+idx = dataset._info[(dataset._info['instrument1']=='forced_vibrato') & (dataset._info['instrument2']=='forced_vibrato') & (dataset._info['delta_time']==0.4425) & (dataset._info['delta_semitone']==9)].index.item()
 data = dataset.__getitem__(idx)
 
 audio,sources_true = data['mix'], data['stems']
@@ -43,7 +43,7 @@ sources_true_spec = pipeline(sources_true.unsqueeze(0))
 #%%
 for K in range(2,7):
 
-    model_path = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC/sources/K{}/".format(K))
+    model_path = Path("/Users/julian/Documents/Code/output/svae/RWC/sources/K{}/".format(K))
     output_img_path = model_path / "properties"
     os.makedirs(output_img_path,exist_ok=True)
 
@@ -57,7 +57,6 @@ for K in range(2,7):
 
     path = model_path / "svae_rwc_K{}_c5.pt".format(K)
     model.load_state_dict(load_state_dict(path=path))
-
     model.eval()
 
     with torch.no_grad():
@@ -77,26 +76,26 @@ for K in range(2,7):
 
         samp_s,samp_z,samp_h = model.sample(N=z_hat.shape[1],M=2)
 
-        temp = optimal_permute(s_deter.view(s_deter.shape[0],s_deter.shape[1],-1),sources_true_spec.reshape(sources_true_spec.shape[0],sources_true_spec.shape[1],-1))
+        temp,_ = optimal_permute(s_deter.view(s_deter.shape[0],s_deter.shape[1],-1),sources_true_spec.reshape(sources_true_spec.shape[0],sources_true_spec.shape[1],-1))
         s_deter = temp.reshape(s_deter.shape).log()
 
 
-    kwds = dict(aspect='auto',origin='lower',interpolation='none',cmap='jet')
+    kwds = dict(aspect='auto',origin='lower',interpolation='none',cmap='Greys',vmin=-8,extent=[0,T,0,sr//2/1e3])
     kwds_subplots = dict(nrows=1,ncols=6,sharey=True,figsize=(8,2))
-    # plt.figure(figsize=(2,2))
-    # plt.imshow(x[0].log(),**kwds,vmin=-8,extent=[0,T,0,sr//2/1e3]);
-    # plt.xlabel('time (s)')
-    # plt.ylabel('frequency (kHz)')
-    # plt.xlim(0)
-    # plt.tight_layout()
-    # plt.savefig(output_img_path/'stft_mix.pdf')
+    plt.figure(figsize=(2.5,2))
+    plt.imshow(x[0].log(),**kwds);
+    plt.xlabel('time (s)')
+    plt.ylabel('frequency (kHz)')
+    plt.xlim(0)
+    plt.tight_layout()
+    plt.savefig(output_img_path/'stft_mix.pdf')
 
-    # plt.figure(figsize=(2.5,2))
-    # plt.imshow(x_hat[0],**kwds,vmin=-8,extent=[0,T,0,sr//2/1e3]);
-    # plt.xlabel('time (s)')
-    # plt.ylabel('frequency (kHz)')
-    # plt.tight_layout()
-    # plt.savefig(output_img_path/'stft_mix_estimate.pdf')
+    plt.figure(figsize=(2.5,2))
+    plt.imshow(x_hat[0],**kwds);
+    plt.xlabel('time (s)')
+    plt.ylabel('frequency (kHz)')
+    plt.tight_layout()
+    plt.savefig(output_img_path/'stft_mix_estimate.pdf')
 
 
     # fig,ax = plt.subplots(**kwds_subplots)
@@ -123,7 +122,7 @@ for K in range(2,7):
 
     fig,ax = plt.subplots(**kwds_subplots)
     for i in range(K):
-        ax[i].imshow(s_deter[0,i],**kwds,vmin=-10,vmax=s_deter.max(),extent=[0,T,0,sr//2/1e3])
+        ax[i].imshow(s_deter[0,i],**kwds)
         ax[i].set_xlabel('time (s)')
     for i in range(K,6):
         ax[i].remove()
@@ -134,7 +133,7 @@ for K in range(2,7):
 
 fig,ax = plt.subplots(**kwds_subplots)
 for i in range(2):
-    ax[i].imshow(sources_true_spec[0,i].log(),**kwds,vmin=-10,vmax=s_deter.max(),extent=[0,T,0,sr//2/1e3])
+    ax[i].imshow(sources_true_spec[0,i].log(),**kwds)
     ax[i].set_xlabel('time (s)')
 for i in range(2,6):
     ax[i].remove()
@@ -144,21 +143,53 @@ plt.savefig(output_img_path/'stft_sources_ground_truth.pdf')
 plt.close()
 
 # %%
+K = 4
+
+model_path = Path("/Users/julian/Documents/Code/output/svae/RWC/sources/K{}/".format(K))
+path = model_path / "svae_rwc_K{}_c5.pt".format(K)
+K_plot = K
+
+# model_path = Path("/Users/julian/Documents/Code/output/svae/VCTK/230129-13274778/t2")
+# path = model_path / "svae_VCTK_S2_K4_L1_pooled_D256_C5-10.pt"
+# K_plot = 2 
+
+output_img_path = model_path / "properties"
+os.makedirs(output_img_path,exist_ok=True)
+
+fname = model_path / "configuration.txt"
+with open(fname) as f:
+    data = f.read()
+args = json.loads(data)
+
+model = DCAE(num_sources=K,dimx=257,dimz=256,dimh=512,dimg=512,kernel_size=(3,3),stride=(2,2),padding=(1,1),layer_channels=(32,64,128,128,128),activate_final_layer=True)
+
+
+model.load_state_dict(load_state_dict(path=path))
+model.eval()
+
 torch.manual_seed(2)
 with torch.no_grad():
-    M = 2
+    M = 5
     samp_s,samp_z,samp_h = model.sample(N=40,M=M)
 
+kwds_sample = {}
+for i in kwds:
+    if i not in ["vmin","vmax","extent"]:
+        kwds_sample[i] = kwds[i]
 vmax = samp_s.log().max()
+
+#%%
 for j in range(M):
-    fig,ax = plt.subplots(1,K,figsize=(8/5*K,2),sharex=True,sharey=True)
+    fig,ax = plt.subplots(1,K_plot,figsize=(6,2),sharex=True,sharey=True)
     ax = np.atleast_2d(ax)
-    for i in range(K):
-        ax[0,i].imshow(samp_s[j,i].log(),**kwds,vmin=-10,vmax=vmax,extent=[0,samp_s.shape[-1]*128/sr,0,sr//2/1e3])
+    for i in range(K_plot):
+        ax[0,i].imshow(samp_s[j,i].log(),**kwds_sample,vmin=-10,vmax=vmax,extent=[0,samp_s.shape[-1]*128/sr,0,sr//2/1e3])
         ax[0,0].set_ylabel('frequency (kHz)')
         ax[0,i].set_xlabel('time (s)')
+        ax[0,i].set_xlim(0)
     plt.tight_layout()
     plt.savefig(output_img_path/'stft_sources_sampled_{}.pdf'.format(j+1))
+
 # %%
 # samp_source = pipeline.inverse_stft(samp_s.exp() * torch.exp(0*1j*torch.randn(samp_s.shape)))
 gl = GriffinLim(n_fft=512,n_iter=100,win_length=512,hop_length=128,power=1)
@@ -166,12 +197,13 @@ samp_source = gl(samp_s ** (1/.5))
 samp_source /= samp_source.abs().max() * 2
 
 #%%
-samp_source = samp_source.view(-1,samp_source.shape[-1])
+samp_source = samp_source.view(-1,samp_s.shape[1],samp_source.shape[-1])
 # idx = samp_source.abs().sum(-1).argsort(descending=True)
 # samp_source = samp_source[idx]
 #%%
-for j in range(K):
-    torchaudio.save(output_img_path / "samped_{}.wav".format(j),samp_source[[j]],16000)
+for i in range(samp_source.shape[0]):
+    for j in range(K_plot):
+        torchaudio.save(output_img_path / "samped_{}_{}.wav".format(i+1,j+1),samp_source[i,[j]],16000)
 # %%
 
 Features = []

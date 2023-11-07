@@ -3,6 +3,7 @@ import torch
 from torch import nn
 import math
 from utils.stft import STFT, iSTFT, get_win, biorwin
+from utils.utils import complex_to_mag, complex_to_polar, complex_to_polar_activated
 from utils.utils import complex_to_mag
 import numpy as np
 from lossfun import FreqSignalLoss
@@ -608,13 +609,32 @@ class NormalLikelihood(nn.Module):
     #     mean = torch.complex(mean[:,0],mean[:,1])
     #     mu = mean.clone().detach()
     #     alpha = torch.ones(n,*([1]*(x.ndim-1)),device=mean.device,dtype=x.dtype)
+    # def get_eps_complex(self,x,mean):
+    #     n = mean.shape[0]
+    #     x = torch.complex(x[:,0],x[:,1])
+    #     mean = torch.complex(mean[:,0],mean[:,1])
+    #     mu = mean.clone().detach()
+    #     alpha = torch.ones(n,*([1]*(x.ndim-1)),device=mean.device,dtype=x.dtype)
         
     #     if self.scale_invariant:
     #         d = (mu.conj() * mu).view(n,-1).sum(-1)
     #         d[d==0] = 1.0
     #         alpha = (mu.conj() * x).view(n,-1).sum(-1) / d
     #         alpha = alpha.view(n,*([1]*(x.ndim-1)))
+    #     if self.scale_invariant:
+    #         d = (mu.conj() * mu).view(n,-1).sum(-1)
+    #         d[d==0] = 1.0
+    #         alpha = (mu.conj() * x).view(n,-1).sum(-1) / d
+    #         alpha = alpha.view(n,*([1]*(x.ndim-1)))
                 
+    #     eps = x - alpha*mean
+    #     eps = torch.stack([eps.real,eps.imag],1)
+    #     return eps
+    
+    def get_eps_complex(self,x,mean):
+        x = complex_to_mag(x,1)
+        mean = complex_to_mag(mean,1)
+        return self.get_eps(x=x,mean=mean)
     #     eps = x - alpha*mean
     #     eps = torch.stack([eps.real,eps.imag],1)
     #     return eps
@@ -681,10 +701,17 @@ class LossFunction(nn.Module):
             self.likelihood = LaplaceLikelihood(scale_invariant=scale_invariant)
         else:
             self.likelihood = NormalLikelihood(scale_invariant=scale_invariant,complex=False)
+            self.likelihood = NormalLikelihood(scale_invariant=scale_invariant,complex=False)
         
     def forward(self,x,output):
         mu_x,mu,logvar,mu_prior,logvar_prior, mu0, logvar0 = output['recon_x'], output['mu_q'], output['logvar_q'],output['mu_p'], output['logvar_p'], output['mu0_q'], output['logvar0_q']
         smu0, slogvar0, variance = output['smu0'], output['slogvar0'], output['variance']
+
+        if self.complex_version:
+            x = complex_to_mag(x,1)
+            mu_x = complex_to_mag(mu_x,1)
+            # x = complex_to_polar(x,1)
+            # mu_x = complex_to_polar_activated(mu_x,1)
 
         if self.complex_version:
             x = complex_to_mag(x,1)
@@ -747,7 +774,6 @@ class SVAE(DCAE):
 
         self.out_type = out_type
         self.phase_activation = nn.Tanh()
-        
 
     def decode(self,z):        
         z = z.transpose(-2,-1)
@@ -756,14 +782,10 @@ class SVAE(DCAE):
         if self.out_type=="mag":
             mag = self.activation(x[:,0])
             return mag
-        elif self.out_type == "activated":
-            mag = self.activation(x[:,0])
-            phase = np.pi*self.phase_activation(x[:,1])
+        else:
             xr = mag * torch.cos(phase)
             xi = mag * torch.sin(phase)
             x = torch.stack([xr,xi],1)
-            return x
-        else:
             return x
 
     def forward(self, x):
@@ -965,6 +987,7 @@ class TConvSeparator(nn.Module):
             for ii in range(1,layers-1):
                 mlist.append(Conv1dLayer(layer_channels,layer_channels,kernel_size=kernel_size,stride=stride,padding=paddings[ii],dilation=dilations[ii],batchnorm=True,bias=bias))
             mlist.append(Conv1dLayer(layer_channels,output_channels,kernel_size=kernel_size,stride=stride,padding=paddings[-1],dilation=dilations[-1],batchnorm=False,bias=bias))
+            mlist.append(Conv1dLayer(layer_channels,output_channels,kernel_size=kernel_size,stride=stride,padding=paddings[-1],dilation=dilations[-1],batchnorm=False,bias=bias))
 
         self.Network = nn.Sequential(*mlist)
 
@@ -1062,6 +1085,16 @@ class DSVAE(DCAE):
         self.fc_decoder = TConvTranspose(input_channels=self.dimz,output_channels=self.encoded_features,kernel_size=separator_kernel_size,stride=1,padding=1,dilation=1,layers=separator_layers,layer_channels=separator_channels,starting_layer=len(layer_channels))
 
 
+class DCAE_MixIT(DCAE):
+    def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None, kernel_size=(3, 2), stride=(2, 1), padding=(1, 0), dilation=(1, 1), variance=0.1, activate_final_layer=True, kernel_size_separator=1, rnn_type='lstm', inference_rnn=True, autoencoder=False):
+        super().__init__(dimx, dimz, dimh, dimg, chans, num_sources, net_type, num_layers, scale_invariant, layer_channels, kernel_size, stride, padding, dilation, variance, activate_final_layer, kernel_size_separator, rnn_type, inference_rnn, autoencoder)
+    
+    def forward(self, x, stochastic=False):
+        mu_q = self.encode(x)[0]
+        mu_s = self.decode(mu_q)
+        mu_s = mu_s.view(-1,self.num_sources,mu_s.size(-2),mu_s.size(-1))
+        return mu_s
+
 
 #%%
 if __name__ == "__main__":
@@ -1083,6 +1116,7 @@ if __name__ == "__main__":
     input[:,T//2] = 1
     # model = DSVAE(num_sources=2,dimx=257,dimz=32,dimh=256,kernel_size=(3,3),stride=(2,1),padding=(1,1),dilation=(1,1),layer_channels=layer_channels,activate_final_layer=True,separator_kernel_size=kernel_size,separator_layers=1,separator_dilation=1,rnn_type='gru',separator_channels=64,inference_rnn=False)
     # model = DCAE(num_sources=2,dimx=257,dimz=16,dimh=256,kernel_size=(3,3),stride=(2,2),padding=(1,1),dilation=(1,1),layer_channels=layer_channels,activate_final_layer=True)
+    model = SVAE(phase_activation=False,num_sources=2,dimx=257,dimz=16,dimh=256,kernel_size=(3,3),stride=(2,2),padding=(1,1),dilation=(1,1),layer_channels=layer_channels,activate_final_layer=True)
     model = SVAE(phase_activation=False,num_sources=2,dimx=257,dimz=16,dimh=256,kernel_size=(3,3),stride=(2,2),padding=(1,1),dilation=(1,1),layer_channels=layer_channels,activate_final_layer=True)
 
     separator = Separator(model=model,compression=.5)

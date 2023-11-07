@@ -261,7 +261,7 @@ class AuditoryStreams(Dataset):
     def __init__(self,root: str, audio_ext=".wav"):
 
         self._path = Path(root)
-        self._audio_dir = self._path / 'mix'
+        self._audio_dir = self._path / 'audio'
         self._audio_ext = audio_ext
 
         self._info = pd.read_json(self._path / 'mix.json',orient='index')
@@ -282,7 +282,7 @@ class AuditoryStreams(Dataset):
         audio_mix, _ = torchaudio.load(mix_filepath)
         audio_stems, _ = torchaudio.load(stems_filepath)
         dict_out = dict(mix=audio_mix,stems=audio_stems)
-        for i in ['delta_time','delta_semitone','physics1','physics2']:
+        for i in ['delta_time','delta_semitone','instrument1','instrument2']:
             dict_out[i] = info[i]
         return dict_out
 

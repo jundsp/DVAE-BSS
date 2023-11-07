@@ -37,6 +37,8 @@ parser.add_argument('--rnn-type', type=str, default='lstm', metavar='fname',
                     help='kind of rnn')
 parser.add_argument('--duration', type=float, default=8, metavar='fname',
                     help='duration in seconds')
+parser.add_argument('--lr', type=float, default=.001, metavar='fname',
+                    help='learnrate')
 parser.add_argument('--n-time', type=int, default=513, metavar='N',
                     help='Time frames')
 parser.add_argument('--data-directory', type=str, default='/Volumes/JulianSSD/data', metavar='fname',
