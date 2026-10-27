@@ -40,10 +40,11 @@ LOG_FIELDS = [
 ]
 
 
-def build_parser() -> argparse.ArgumentParser:
-    """Command-line options of ``dvae-train``."""
+def build_parser(add_help: bool = True) -> argparse.ArgumentParser:
+    """Command-line options of ``dvae-train`` (``add_help=False`` to reuse them as a parent)."""
     parser = argparse.ArgumentParser(
         prog="dvae-train",
+        add_help=add_help,
         description="Train a DVAE for unsupervised blind source separation. The model only "
         "sees mixtures of randomly drawn sounds; no source labels are used.",
     )

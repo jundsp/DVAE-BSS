@@ -3,6 +3,8 @@ from pathlib import Path
 import pytest
 import torch
 
+from synthetic import TRAIN, write_notes
+
 FIXTURE = Path(__file__).parent / "fixtures" / "golden.pt"
 
 OLD_TO_NEW = dict(
@@ -28,3 +30,14 @@ def entry(request, golden):
     data = dict(golden[request.param], name=request.param)
     data["new_config"] = new_config(data, request.param)
     return data
+
+
+@pytest.fixture(scope="session")
+def run(tmp_path_factory):
+    """A tiny model trained for two epochs on synthetic notes: ``<root>/run/model.pt``."""
+    from dvae_bss.cli import train
+
+    root = tmp_path_factory.mktemp("trained")
+    notes = write_notes(root / "notes")
+    train.main(["--train-data", str(notes), "--out", str(root / "run"), "--epochs", "2", *TRAIN])
+    return root

@@ -42,3 +42,10 @@ def write_premixed(folder: Path, n: int = 4) -> Path:
         )  # fmt: skip
     (folder / "mix.json").write_text(json.dumps(records))
     return folder
+
+
+# Options of dvae-train for a tiny, fast run on the synthetic notes.
+TRAIN = [
+    "--duration", "2", "--batch-size", "4", "--num-workers", "0", "--device", "cpu",
+    "--log-interval", "1", *TINY_MODEL,
+]  # fmt: skip

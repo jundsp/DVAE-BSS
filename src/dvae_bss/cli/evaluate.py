@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
-from typing import Any
 
-import numpy as np
 import soundfile as sf
 import torch
-from torch.utils.data import DataLoader
 
 from ..checkpoint import load_model
 from ..data import PremixedDataset
-from ..metrics import bss_metrics
+from ..evaluation import evaluate_methods, print_summary
 from ..separator import Separator
 from .common import resolve_device
 
@@ -37,37 +33,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _rows(
-    batch: dict[str, Any], metrics: dict[str, torch.Tensor], first_index: int
-) -> list[dict[str, Any]]:
-    """One record per (example, target source), with the example's metadata copied over."""
-    n_examples, n_sources = metrics["sdr"].shape
-    skip = {"mix", "stems"}
-    meta = {k: v for k, v in batch.items() if k not in skip}
-    # Rank of each source by SI-SDR within its mixture (0 = worst).
-    rank = metrics["sdr"].argsort(-1).argsort(-1)
-    rows = []
-    for i in range(n_examples):
-        example = {k: (v[i].item() if torch.is_tensor(v) else v[i]) for k, v in meta.items()}
-        for j in range(n_sources):
-            row = {
-                "example": first_index + i,
-                "source": j,
-                "sdr": metrics["sdr"][i, j].item(),
-                "sir": metrics["sir"][i, j].item(),
-                "sar": metrics["sar"][i, j].item(),
-                "place": int(rank[i, j]),
-                **example,
-            }
-            if f"instrument{j + 1}" in example:
-                row["instrument"] = example[f"instrument{j + 1}"]
-            if f"pitch{j + 1}" in example and "pitch1" in example and "pitch2" in example:
-                row["pitch"] = example[f"pitch{j + 1}"]
-                row["delta_pitch"] = example["pitch1"] - example["pitch2"]
-            rows.append(row)
-    return rows
-
-
 def main(argv: list[str] | None = None) -> None:
     """Entry point of ``dvae-evaluate``."""
     args = build_parser().parse_args(argv)
@@ -76,36 +41,24 @@ def main(argv: list[str] | None = None) -> None:
     separator = Separator(model, stft).to(device).eval()
 
     dataset = PremixedDataset(args.data, stft.sample_rate)
-    loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False)
-    args.out_dir.mkdir(parents=True, exist_ok=True)
     print(f"evaluating {len(dataset)} mixtures")
 
-    rows: list[dict[str, Any]] = []
-    for batch_index, batch in enumerate(loader):
-        if args.max_batches is not None and batch_index >= args.max_batches:
-            break
-        mix, stems = batch["mix"].to(device), batch["stems"].to(device)
-        metrics = bss_metrics(separator(mix), stems)
-        first = len(rows) // stems.shape[1]
-        scores = {k: metrics[k].cpu() for k in ("sdr", "sir", "sar")}
-        rows += _rows(batch, scores, first)
-        if args.save_audio:
-            for i, estimates in enumerate(metrics["estimates"].cpu()):
-                target = args.out_dir / f"estimates_{first + i}.wav"
-                sf.write(target, estimates.T.numpy(), stft.sample_rate)
-        print(f"batch {batch_index + 1}/{len(loader)}")
+    def save_audio(_: str, first: int, estimates: torch.Tensor) -> None:
+        for i, example in enumerate(estimates):
+            sf.write(
+                args.out_dir / f"estimates_{first + i}.wav", example.T.numpy(), stft.sample_rate
+            )
 
-    (args.out_dir / "results.json").write_text(
-        json.dumps({str(i): row for i, row in enumerate(rows)}, indent=2)
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    summaries = evaluate_methods(
+        {"": lambda batch: separator(batch["mix"].to(device))},
+        dataset,
+        args.out_dir,
+        args.batch_size,
+        args.max_batches,
+        on_batch=save_audio if args.save_audio else None,
     )
-    scores = {name: np.array([row[name] for row in rows]) for name in ("sdr", "sir", "sar")}
-    summary: dict[str, Any] = {
-        name: {"mean": float(v.mean()), "std": float(v.std())} for name, v in scores.items()
-    }
-    summary["n_sources"] = len(rows)
-    (args.out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
-    for name in ("sdr", "sir", "sar"):
-        print(f"{name.upper():4s} {summary[name]['mean']:6.2f} dB (std {summary[name]['std']:.2f})")
+    print_summary(summaries[""])
 
 
 if __name__ == "__main__":

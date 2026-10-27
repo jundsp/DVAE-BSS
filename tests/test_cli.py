@@ -10,21 +10,7 @@ import torch
 
 from dvae_bss import load_checkpoint
 from dvae_bss.cli import evaluate, separate, train
-from synthetic import SAMPLE_RATE, TINY_MODEL, note, write_notes, write_premixed
-
-TRAIN = [
-    "--duration", "2", "--batch-size", "4", "--num-workers", "0", "--device", "cpu",
-    "--log-interval", "1", *TINY_MODEL,
-]  # fmt: skip
-
-
-@pytest.fixture(scope="module")
-def run(tmp_path_factory):
-    """A tiny trained model shared by the tests of this module."""
-    root = tmp_path_factory.mktemp("cli")
-    notes = write_notes(root / "notes")
-    train.main(["--train-data", str(notes), "--out", str(root / "run"), "--epochs", "2", *TRAIN])
-    return root
+from synthetic import SAMPLE_RATE, TRAIN, note, write_premixed
 
 
 def test_train_writes_outputs(run):

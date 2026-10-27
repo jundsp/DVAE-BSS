@@ -28,19 +28,30 @@ def spectrogram_db(
     return magnitude.numpy(), times, freqs
 
 
-def plot_spectrogram(ax, wave, sample_rate: int = 16000, dynamic_range: float = 80.0, **kwargs):  # noqa: ANN001
-    """Draw a spectrogram on ``ax``; colours span ``dynamic_range`` dB below the peak."""
+def plot_spectrogram(  # noqa: ANN201
+    ax, wave, sample_rate: int = 16000, dynamic_range: float = 80.0, vmax: float | None = None
+):
+    """Draw a spectrogram on ``ax``; colours span ``dynamic_range`` dB below ``vmax``.
+
+    Args:
+        ax: Matplotlib axes.
+        wave: Waveform ``(L,)``.
+        sample_rate: Sample rate in Hz.
+        dynamic_range: Range of the colour scale (dB).
+        vmax: Top of the colour scale in dB; default: the spectrogram's own peak. Pass the
+            same value to several panels to make them comparable.
+    """
     spec, times, freqs = spectrogram_db(wave, sample_rate)
+    vmax = spec.max() if vmax is None else vmax
     image = ax.imshow(
         spec,
         origin="lower",
         aspect="auto",
         cmap="magma",
         extent=(times[0], times[-1], freqs[0] / 1e3, freqs[-1] / 1e3),
-        vmin=spec.max() - dynamic_range,
-        vmax=spec.max(),
+        vmin=vmax - dynamic_range,
+        vmax=vmax,
         interpolation="none",
-        **kwargs,
     )
     ax.set_xlim(0, times[-1])
     return image
