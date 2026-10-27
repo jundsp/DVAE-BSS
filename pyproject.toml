@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dvae-bss"
+version = "0.1.0"
+description = "Dynamical variational auto-encoding for unsupervised blind sound separation"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
+authors = [{ name = "Julian Neri", email = "43224513+jundsp@users.noreply.github.com" }]
+dependencies = [
+    "numpy",
+    "scipy",
+    "soundfile",
+    "torch",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+plots = ["matplotlib"]
+experiments = ["matplotlib", "pandas", "scikit-learn", "seaborn"]
+dev = ["pytest", "ruff"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "D"]
+ignore = ["D105", "D107"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]
+"experiments/*" = ["D103"]

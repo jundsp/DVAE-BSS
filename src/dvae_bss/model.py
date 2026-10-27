@@ -1,15 +1,12 @@
-#%%
+import math
+
+import numpy as np
 import torch
 from torch import nn
-import math
-from utils.stft import STFT, iSTFT, get_win, biorwin
-from utils.utils import complex_to_mag, complex_to_polar, complex_to_polar_activated
-from utils.utils import complex_to_mag
-import numpy as np
-from lossfun import FreqSignalLoss
-from dataset import get_data_loaders, AudioPipeline
 from torch.nn import functional as F
-import torchaudio
+
+from .metrics import complex_to_mag
+
 
 class DSAE(nn.Module):
     def __init__(self, dimx, dimz, dimh=64, dimg=64, chans=64, num_sources=1, net_type='pooled', num_layers=1, scale_invariant=False, layer_channels=None, averaged_loss=True,rnn_type='lstm',inference_rnn=True,autoencoder=False):
