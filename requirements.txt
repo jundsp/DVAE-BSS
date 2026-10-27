@@ -1,18 +1,28 @@
-numpy
-scipy
-torch
-torchaudio
-torchvision
-tensorboard
-soundfile
-librosa
-pandas
-matplotlib
-seaborn
-tqdm
+# Exact versions the test suite and every experiments/ script were checked with
+# (Python 3.12, Linux). For a looser install use `pip install -e .[experiments,dev]` instead.
+#
+#   pip install -r requirements.txt
+#   pip install -e . --no-deps
+#
+# PyPI's default torch wheel bundles CUDA. For a CPU-only install, add
+#   --extra-index-url https://download.pytorch.org/whl/cpu
 
-# optional: spectrogram plots in infer.py and summarize/qualitative.py
-# sines @ git+https://github.com/jundsp/sines.git
-# optional: MUSDB stem conversion in utils/resampler.py
-# stempeg
-# optional: NMF baseline in baseline_traditional.py needs the NMF Toolbox (AudioLabs Erlangen)
+# core (dvae-train, dvae-separate, dvae-evaluate)
+numpy==2.5.4
+scipy==1.18.1
+soundfile==0.14.0
+torch==2.14.1
+tqdm==4.70.1
+
+# plots and experiments/
+matplotlib==3.11.2
+pandas==3.1.0
+scikit-learn==1.9.1
+seaborn==0.13.2
+
+# development
+pytest==9.1.1
+ruff==0.17.3
+
+# The NMF baseline also needs the NMF Toolbox (not on PyPI):
+# clone https://github.com/groupmm/NMFtoolbox and add it to PYTHONPATH.
