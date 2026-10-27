@@ -11,6 +11,10 @@ Every script has `--help`, takes its paths as arguments, and writes into an outp
 `dvae-evaluate` and the baselines all write the same `results.json` (one record per mixture and
 source, with SI-SDR/SIR/SAR and the test set's metadata), so any figure script can read any of them.
 
+Figures use the dissertation's style (`dvae_bss.plotting.style`: Computer Modern text and `jet`
+spectrograms) without needing LaTeX. Pass `--usetex` to typeset with LaTeX, as the dissertation
+did.
+
 ## Workflow
 
 ```bash
@@ -38,6 +42,7 @@ python experiments/figures/compare_runs.py results/c1/results.json results/c05/r
 | `figures/qualitative.py` | mixture, true sources and estimates as spectrograms, plus wav files | qualitative separation examples |
 | `figures/model_internals.py` | sources, latent states, prior samples, encoder and decoder feature maps | feature and latent-state figures |
 | `baselines/ica_nmf.py`, `baselines/mixit.py` | classical and MixIT baselines | not in the dissertation's dynamical tables (see below) |
+| `figures/make_demo_page.py` | web page with audio and spectrograms of separated examples (`docs/`) | none (the repository's examples page) |
 | `data_prep/*` | resampling and splitting of sounds, file lists, test-set builder | dataset preparation |
 
 To compare settings, train one model per setting (`dvae-train --compression 0.3 ...`), evaluate

@@ -1,6 +1,9 @@
 # DVAE-BSS
 
+[![CI](https://github.com/jundsp/DVAE-BSS/actions/workflows/ci.yml/badge.svg)](https://github.com/jundsp/DVAE-BSS/actions/workflows/ci.yml)
+
 Dynamical variational auto-encoding for unsupervised blind sound separation.
+**[Listen to examples](https://jundsp.github.io/DVAE-BSS/)**
 
 This is the code for **Chapter 6 of my Ph.D. dissertation**, *Bayesian Hierarchical Modeling
 and Inference of Mixed Audio Sources* (Julian Neri, McGill University, 2024). If you use the
@@ -11,6 +14,12 @@ their sources **from mixtures alone**: no isolated source signals, labels or tar
 needed during training. The model is trained by reconstructing mixtures as a sum of `K`
 decoded sources, each with its own latent trajectory under a learned dynamical prior. Because
 the prior is recurrent, the model separates signals of any duration.
+
+![Concept of the DVAE: an encoder maps the mixture spectrogram to latent source trajectories, a decoder maps each trajectory to a source spectrogram, and the sources add up to an estimate of the mixture.](docs/concept.jpg)
+
+*The encoder infers a latent trajectory for each source from the mixture `y`. The decoder maps
+each trajectory `x_k` to a source spectrogram, and the decoded sources must add up to the
+mixture. Training needs only mixtures. Figure from the dissertation (Ch. 6).*
 
 ![A two-note mixture (left) and the five outputs of a DVAE trained on RWC (right): the two notes land in two outputs, the other three stay nearly silent.](docs/example.png)
 
@@ -174,6 +183,7 @@ pitch/time breakdowns, feature maps), and a table of which script produces which
 | [`scripts/slurm_train.sh`](scripts/slurm_train.sh) | multi-GPU training on a Slurm cluster |
 | [`pretrained/`](pretrained/README.md) | the dissertation's RWC model (`K = 5`) and its model card |
 | [`examples/`](examples/README.md) | a two-note example mixture |
+| [`docs/`](docs) | figures, and the examples page served by GitHub Pages (built by `experiments/figures/make_demo_page.py`) |
 | [`tests/`](tests) | unit tests, CLI tests on synthetic audio, and equivalence tests against the original code |
 
 ## Differences from the dissertation code

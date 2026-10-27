@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DVAE-BSS examples</title>
+<style>
+:root { --bg: #ffffff; --fg: #1d1d1f; --muted: #5f6368; --card: #f4f5f7; --line: #dcdfe4;
+  --accent: #0b6bcb; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111214; --fg: #e8e8ea; --muted: #a0a4ab; --card: #1b1d21; --line: #2c3036;
+    --accent: #6cb4ff; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1080px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 1.8rem; margin: 0 0 4px; }
+h2 { font-size: 1.15rem; margin: 0; }
+p { margin: 8px 0; }
+a { color: var(--accent); }
+.lead, .meta, .note { color: var(--muted); }
+.lead { max-width: 760px; }
+.diagram { display: block; width: 100%; max-width: 900px; margin-top: 16px; background: #fff;
+  border-radius: 8px; }
+section { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px; margin-top: 24px; }
+.row { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: start;
+  margin-top: 14px; }
+.row > span { font-weight: 600; padding-top: 4px; }
+.clips { display: flex; flex-wrap: wrap; gap: 12px; }
+figure { margin: 0; width: 320px; max-width: 100%; }
+figcaption { font-size: .9rem; display: flex; justify-content: space-between; }
+.score { color: var(--muted); font-variant-numeric: tabular-nums; }
+img { display: block; width: 100%; height: auto; border-radius: 4px; background: #000; }
+audio { width: 100%; height: 36px; margin-top: 4px; }
+footer { margin-top: 32px; font-size: .9rem; color: var(--muted); }
+@media (max-width: 640px) { .row { grid-template-columns: 1fr; gap: 4px; } }
+</style>
+</head>
+<body>
+<main>
+<h1>DVAE-BSS: separation examples</h1>
+<p class="lead">A dynamical variational auto-encoder trained only on mixtures of instrument
+notes (RWC), with no isolated sources, separates two-note mixtures from a synthetic test set it
+never saw. It has 5 outputs. The two closest to the true notes are shown with their
+SI-SDR; the remaining outputs carry the share of the output energy given under each example.
+Spectrograms share one colour scale per example.</p>
+<p class="lead">Code, pretrained model and paper references:
+<a href="https://github.com/jundsp/DVAE-BSS">github.com/jundsp/DVAE-BSS</a>. From Chapter 6 of
+J. Neri, <em>Bayesian Hierarchical Modeling and Inference of Mixed Audio Sources</em>, Ph.D.
+dissertation, McGill University, 2024.</p>
+<img class="diagram" src="concept.jpg" alt="Concept of the DVAE: an encoder maps the mixture to latent source trajectories, a decoder maps each to a source spectrogram, and the sources add up to the mixture.">
+<section><h2>Example 1</h2><p class="meta">sustained note + decaying note, 8 semitones apart, second note starts 0.51 s later (test-set item 365).</p><div class="row"><span>mixture</span><div class="clips"><figure><figcaption></figcaption><img src="img/ex365_mixture.png" alt="spectrogram: " width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex365_mixture.wav"></audio></figure></div></div><div class="row"><span>true notes</span><div class="clips"><figure><figcaption>note 1</figcaption><img src="img/ex365_source1.png" alt="spectrogram: note 1" width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex365_source1.wav"></audio></figure><figure><figcaption>note 2</figcaption><img src="img/ex365_source2.png" alt="spectrogram: note 2" width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex365_source2.wav"></audio></figure></div></div><div class="row"><span>separated</span><div class="clips"><figure><figcaption>output for note 1<span class="score">16.2 dB</span></figcaption><img src="img/ex365_estimate1.png" alt="spectrogram: output for note 1" width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex365_estimate1.wav"></audio></figure><figure><figcaption>output for note 2<span class="score">16.3 dB</span></figcaption><img src="img/ex365_estimate2.png" alt="spectrogram: output for note 2" width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex365_estimate2.wav"></audio></figure></div></div><p class="note">Other 3 outputs: 0.00 % of the output energy.</p></section>
+<section><h2>Example 2</h2><p class="meta">sustained note with vibrato + decaying note, 10 semitones apart, second note starts 0.44 s later (test-set item 619).</p><div class="row"><span>mixture</span><div class="clips"><figure><figcaption></figcaption><img src="img/ex619_mixture.png" alt="spectrogram: " width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex619_mixture.wav"></audio></figure></div></div><div class="row"><span>true notes</span><div class="clips"><figure><figcaption>note 1</figcaption><img src="img/ex619_source1.png" alt="spectrogram: note 1" width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex619_source1.wav"></audio></figure><figure><figcaption>note 2</figcaption><img src="img/ex619_source2.png" alt="spectrogram: note 2" width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex619_source2.wav"></audio></figure></div></div><div class="row"><span>separated</span><div class="clips"><figure><figcaption>output for note 1<span class="score">16.3 dB</span></figcaption><img src="img/ex619_estimate1.png" alt="spectrogram: output for note 1" width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex619_estimate1.wav"></audio></figure><figure><figcaption>output for note 2<span class="score">16.3 dB</span></figcaption><img src="img/ex619_estimate2.png" alt="spectrogram: output for note 2" width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex619_estimate2.wav"></audio></figure></div></div><p class="note">Other 3 outputs: 0.00 % of the output energy.</p></section>
+<section><h2>Example 3</h2><p class="meta">sustained note + decaying note, 8 semitones apart, second note starts 0.01 s later (test-set item 357).</p><div class="row"><span>mixture</span><div class="clips"><figure><figcaption></figcaption><img src="img/ex357_mixture.png" alt="spectrogram: " width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex357_mixture.wav"></audio></figure></div></div><div class="row"><span>true notes</span><div class="clips"><figure><figcaption>note 1</figcaption><img src="img/ex357_source1.png" alt="spectrogram: note 1" width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex357_source1.wav"></audio></figure><figure><figcaption>note 2</figcaption><img src="img/ex357_source2.png" alt="spectrogram: note 2" width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex357_source2.wav"></audio></figure></div></div><div class="row"><span>separated</span><div class="clips"><figure><figcaption>output for note 1<span class="score">16.5 dB</span></figcaption><img src="img/ex357_estimate1.png" alt="spectrogram: output for note 1" width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex357_estimate1.wav"></audio></figure><figure><figcaption>output for note 2<span class="score">17.5 dB</span></figcaption><img src="img/ex357_estimate2.png" alt="spectrogram: output for note 2" width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex357_estimate2.wav"></audio></figure></div></div><p class="note">Other 3 outputs: 0.00 % of the output energy.</p></section>
+<section><h2>Example 4</h2><p class="meta">sustained note + decaying note, 0 semitones apart, second note starts 0.07 s later (test-set item 222). Typical failure: notes at the same pitch are not separated.</p><div class="row"><span>mixture</span><div class="clips"><figure><figcaption></figcaption><img src="img/ex222_mixture.png" alt="spectrogram: " width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex222_mixture.wav"></audio></figure></div></div><div class="row"><span>true notes</span><div class="clips"><figure><figcaption>note 1</figcaption><img src="img/ex222_source1.png" alt="spectrogram: note 1" width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex222_source1.wav"></audio></figure><figure><figcaption>note 2</figcaption><img src="img/ex222_source2.png" alt="spectrogram: note 2" width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex222_source2.wav"></audio></figure></div></div><div class="row"><span>separated</span><div class="clips"><figure><figcaption>output for note 1<span class="score">-1.4 dB</span></figcaption><img src="img/ex222_estimate1.png" alt="spectrogram: output for note 1" width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex222_estimate1.wav"></audio></figure><figure><figcaption>output for note 2<span class="score">-19.6 dB</span></figcaption><img src="img/ex222_estimate2.png" alt="spectrogram: output for note 2" width="320" height="160" loading="lazy"><audio controls preload="none" src="audio/ex222_estimate2.wav"></audio></figure></div></div><p class="note">Other 3 outputs: 0.00 % of the output energy.</p></section>
+<footer>Generated by <code>experiments/figures/make_demo_page.py</code>. Audio: 16 kHz
+mono.</footer>
+</main>
+</body>
+</html>

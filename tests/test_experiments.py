@@ -214,3 +214,15 @@ def test_make_filelists(tmp_path):
         for p in (tmp_path / "notes" / f"{n}.txt").read_text().split()
     ]
     assert len(everything) == len(set(everything)) == 20
+
+
+def test_make_demo_page(run, test_set, tmp_path):
+    script("figures/make_demo_page.py").main(
+        ["-m", str(run / "run" / "model.pt"), "-d", str(test_set), "--examples", "0", "2",
+         "--notes", "", "a remark", "-o", str(tmp_path)]
+    )  # fmt: skip
+    page = (tmp_path / "index.html").read_text()
+    assert page.count("<section>") == 2 and "a remark" in page
+    for name in ("ex0_mixture", "ex2_source2", "ex2_estimate1"):
+        assert f'src="audio/{name}.wav"' in page and (tmp_path / "audio" / f"{name}.wav").exists()
+        assert (tmp_path / "img" / f"{name}.png").exists()
