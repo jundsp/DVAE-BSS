@@ -74,10 +74,12 @@ def plot_separation(mixture, sources, sample_rate: int = 16000):  # noqa: ANN001
     fig, axes = plt.subplots(
         1 + len(sources), 1, figsize=(6, 1.6 * (1 + len(sources))), sharex=True, sharey=True
     )
-    plot_spectrogram(axes[0], mixture, sample_rate)
+    # One colour scale for all panels, so that near-silent outputs look silent.
+    top = spectrogram_db(mixture, sample_rate)[0].max()
+    plot_spectrogram(axes[0], mixture, sample_rate, vmax=top)
     axes[0].set_ylabel("mixture\nkHz")
     for k, source in enumerate(sources, start=1):
-        plot_spectrogram(axes[k], source, sample_rate)
+        plot_spectrogram(axes[k], source, sample_rate, vmax=top)
         axes[k].set_ylabel(f"source {k}\nkHz")
     axes[-1].set_xlabel("time (s)")
     fig.tight_layout()
