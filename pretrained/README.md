@@ -1,7 +1,9 @@
 # Pretrained model: `dvae_rwc_k5.pt`
 
-The DVAE behind the RWC and NSynth results of the dissertation (Ch. 6), converted to the
-package's checkpoint format. `dvae-separate` uses it when no `--model` is given.
+The DVAE behind the RWC and NSynth results of Chapter 6 of J. Neri, *Bayesian Hierarchical
+Modeling and Inference of Mixed Audio Sources*, Ph.D. dissertation, McGill University, 2024,
+converted to the package's checkpoint format. `dvae-separate` uses it when no `--model` is
+given. If you use it, please cite the dissertation (see [Citation](../README.md#citation)).
 
 ```python
 from dvae_bss import load_model

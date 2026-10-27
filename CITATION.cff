@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: >-
+  This software is the code for Chapter 6 of the author's Ph.D. dissertation.
+  If you use it or the pretrained model, please cite the dissertation.
+title: "DVAE-BSS: Dynamical variational auto-encoding for unsupervised blind sound separation"
+type: software
+authors:
+  - family-names: Neri
+    given-names: Julian
+license: GPL-3.0-only
+repository-code: "https://github.com/jundsp/DVAE-BSS"
+keywords:
+  - audio source separation
+  - unsupervised learning
+  - variational auto-encoder
+  - deep learning
+preferred-citation:
+  type: thesis
+  thesis-type: Ph.D. dissertation
+  title: "Bayesian Hierarchical Modeling and Inference of Mixed Audio Sources"
+  authors:
+    - family-names: Neri
+      given-names: Julian
+  institution:
+    name: McGill University
+    city: Montréal
+    country: CA
+  department: Department of Music Research
+  year: 2024
+  url: "https://escholarship.mcgill.ca/downloads/2v23w0350"
+  notes: "Chapter 6: Variational auto-encoding unsupervised blind source separation"

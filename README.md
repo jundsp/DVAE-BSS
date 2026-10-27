@@ -2,6 +2,10 @@
 
 Dynamical variational auto-encoding for unsupervised blind sound separation.
 
+This is the code for **Chapter 6 of my Ph.D. dissertation**, *Bayesian Hierarchical Modeling
+and Inference of Mixed Audio Sources* (Julian Neri, McGill University, 2024). If you use the
+code or the pretrained model, please [cite the dissertation](#citation).
+
 A dynamical (recurrent) variational auto-encoder that learns to split audio mixtures into
 their sources **from mixtures alone**: no isolated source signals, labels or target counts are
 needed during training. The model is trained by reconstructing mixtures as a sum of `K`
@@ -13,7 +17,8 @@ the prior is recurrent, the model separates signals of any duration.
 *A two-note mixture (left) and the `K = 5` outputs of a model trained on RWC (right). Each
 note ends up in its own output; the remaining outputs stay nearly empty.*
 
-This is the code for Chapter 6 of my Ph.D. dissertation. It follows
+The model and all results here are from Chapter 6 of the dissertation, "Variational
+auto-encoding unsupervised blind source separation". It follows
 [VAE-BSS](https://github.com/jundsp/VAE-BSS), the non-dynamical model from our EUSIPCO 2021
 paper, which separates fixed-size spectrograms only. The tag `dissertation-2024` holds the
 original research scripts exactly as used for the dissertation; the current branch is a
@@ -205,10 +210,32 @@ pytest
 
 The full suite runs on CPU in under a minute.
 
-## References
+## Citation
 
-- J. Neri, *Bayesian Hierarchical Modeling and Inference of Mixed Audio Sources*, Ph.D.
-  dissertation, McGill University, 2024.
+If you use this code or the pretrained model in your research, please cite the dissertation:
+
+> J. Neri, *Bayesian Hierarchical Modeling and Inference of Mixed Audio Sources*, Ph.D.
+> dissertation, Department of Music Research, McGill University, Montréal, Canada, 2024.
+> [PDF](https://escholarship.mcgill.ca/downloads/2v23w0350)
+
+```bibtex
+@phdthesis{neri2024bayesian,
+  author = {Neri, Julian},
+  title  = {Bayesian Hierarchical Modeling and Inference of Mixed Audio Sources},
+  school = {McGill University},
+  address = {Montr{\'e}al, Canada},
+  year   = {2024},
+  type   = {Ph.D. dissertation},
+  note   = {Chapter 6: Variational auto-encoding unsupervised blind source separation},
+  url    = {https://escholarship.mcgill.ca/downloads/2v23w0350}
+}
+```
+
+GitHub's "Cite this repository" button gives the same reference (from
+[`CITATION.cff`](CITATION.cff)).
+
+## Related work
+
 - J. Neri, R. Badeau, and P. Depalle, "Unsupervised Blind Source Separation with Variational
   Auto-Encoders," in *Proc. 29th European Signal Processing Conference (EUSIPCO)*, Dublin,
   Ireland, 2021. [Paper](https://hal.science/hal-03255341) ·
