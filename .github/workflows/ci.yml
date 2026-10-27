@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "ruff==0.17.3"
+      - run: ruff check .
+      - run: ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # exact versions from requirements.txt
+          - python-version: "3.12"
+            pinned: true
+          # oldest supported Python, latest compatible releases
+          - python-version: "3.10"
+            pinned: false
+    name: test (Python ${{ matrix.python-version }}${{ matrix.pinned && ', pinned' || '' }})
+    env:
+      PIP_EXTRA_INDEX_URL: https://download.pytorch.org/whl/cpu  # CPU-only torch
+      OMP_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+      - name: Install (pinned)
+        if: matrix.pinned
+        run: |
+          pip install -r requirements.txt
+          pip install -e . --no-deps
+      - name: Install (latest)
+        if: ${{ !matrix.pinned }}
+        run: pip install -e ".[experiments,dev]"
+      - run: pip check
+      - run: pytest -q
