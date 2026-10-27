@@ -19,9 +19,9 @@ import json
 
 args = parser.parse_args()
 
-args.model_directory = "/home/jneri/projects/def-depalle/jneri/output/SVAE/saves/RWC/"
-args.output_directory = "/home/jneri/projects/def-depalle/jneri/evaluation/SVAE/RWC_test/"
-args.data_directory = "/home/jneri/projects/def-depalle/jneri/data/RWC_test"
+args.model_directory = "output/svae/saves/RWC/"
+args.output_directory = "output/svae/evaluation/RWC_test/"
+args.data_directory = "data/RWC_test"
 args.job_id = "231017-22161497"
 path_data = Path(args.data_directory) 
 path_model = Path(args.model_directory) / args.job_id

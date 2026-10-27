@@ -174,7 +174,7 @@ def mag2db(x):
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import soundfile as sf
-    audio, sr = sf.read("/Users/julian/Documents/MATLAB/sounds/greasy.wav")
+    audio, sr = sf.read("data/sounds/greasy.wav")
     x = torch.from_numpy(audio).view(1,-1)
 
     kwds = dict(winlen=.032, hopfrac=.25, nfft=512)

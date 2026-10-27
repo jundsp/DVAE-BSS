@@ -13,7 +13,7 @@ import json
 
 plt.style.use('gibbs.mplstyles.latex')
 
-path = Path("/Volumes/JulianSSD/research/svae-bss/evaluation/TwoNote/230214-13754627")
+path = Path("output/svae/evaluation/TwoNote/230214-13754627")
 fname = path / 'results.json'
 path_out = path / "imgs"
 os.makedirs(path_out,exist_ok=True)

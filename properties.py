@@ -28,7 +28,7 @@ T = 8
 L = int(T*sr)
 audio = torch.zeros(1,L)
 audio[:,sr::sr//2] = 1
-dataset = AuditoryStreams(root="/Users/julian/Documents/Code/data/TwoNote/")
+dataset = AuditoryStreams(root="data/TwoNote/")
 idx = dataset._info[(dataset._info['instrument1']=='forced_vibrato') & (dataset._info['instrument2']=='forced_vibrato') & (dataset._info['delta_time']==0.4425) & (dataset._info['delta_semitone']==9)].index.item()
 data = dataset.__getitem__(idx)
 
@@ -43,7 +43,7 @@ sources_true_spec = pipeline(sources_true.unsqueeze(0))
 #%%
 for K in range(2,7):
 
-    model_path = Path("/Users/julian/Documents/Code/output/svae/RWC/sources/K{}/".format(K))
+    model_path = Path("output/svae/RWC/sources/K{}/".format(K))
     output_img_path = model_path / "properties"
     os.makedirs(output_img_path,exist_ok=True)
 
@@ -145,11 +145,11 @@ plt.close()
 # %%
 K = 4
 
-model_path = Path("/Users/julian/Documents/Code/output/svae/RWC/sources/K{}/".format(K))
+model_path = Path("output/svae/RWC/sources/K{}/".format(K))
 path = model_path / "svae_rwc_K{}_c5.pt".format(K)
 K_plot = K
 
-# model_path = Path("/Users/julian/Documents/Code/output/svae/VCTK/230129-13274778/t2")
+# model_path = Path("output/svae/VCTK/230129-13274778/t2")
 # path = model_path / "svae_VCTK_S2_K4_L1_pooled_D256_C5-10.pt"
 # K_plot = 2 
 

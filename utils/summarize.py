@@ -8,7 +8,7 @@ import glob
 import pandas as pd
 # sns.set()
 
-root = "/Users/julian/Desktop/svae-eval"
+root = "output/svae-eval"
 output_directory = root + "/results"
 os.makedirs(output_directory,exist_ok=True)
 

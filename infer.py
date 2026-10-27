@@ -10,7 +10,7 @@ from argparser import parser
 from utils.utils import load_state_dict
 import json
 import soundfile as sf
-import samplerate
+# import samplerate
 import sines
 from pedalboard.io import AudioFile
 import glob
@@ -20,7 +20,7 @@ sines.style(plt)
 
 #%%
 K = 5
-model_path = Path("/Users/julian/Documents/Code/output/svae/RWC/targets/231017-22161498")
+model_path = Path("output/svae/RWC/targets/231017-22161498")
 
 files = glob.glob(str(model_path / "*.pt"))
 model_filename = files[0]
@@ -80,7 +80,7 @@ model.eval()
 #%%
 
 filename = "mixture"
-audio_root = "/Users/julian/Desktop/violin_scale/"
+audio_root = "data/violin_scale/"
 audio_format = "wav"
 
 
@@ -109,7 +109,7 @@ sources /= normalize
 # input = torch.from_numpy(input)
 # input = torchaudio.functional.resample(input,sr,16000)
 # input = input.sum(0).view(1,-1)
-# dset = Audioset(root="/Volumes/JulianSSD/data/wsj0")
+# dset = Audioset(root="data/wsj0")
 # dload = torch.utils.data.DataLoader(dataset=dset,batch_size=8,shuffle=True)
 # mixer = Mixer(n_sources=2,random_num=True)
 # batch = next(iter(dload))[0]

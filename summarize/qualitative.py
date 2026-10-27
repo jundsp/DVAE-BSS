@@ -66,9 +66,9 @@ def save_spectrogram_grid(filename,mix,targets,estims,vmin=-140,vmax=-20):
     
 args = parser.parse_args(args=[])
 
-args.output_directory = "/Users/julian/Documents/Code/output/svae/RWC_test/ablation_targets"
-args.output_directory = "/Volumes/JulianSSD/research/svae-bss/evaluation/NSYNTH_test/ablation_targets"
-args.output_directory = "/Users/julian/Documents/PhD/2023_IEEE_DVAE_BSS_Neri/imgs/results/svae_qualitative_composite"
+args.output_directory = "output/svae/RWC_test/ablation_targets"
+args.output_directory = "output/svae/evaluation/NSYNTH_test/ablation_targets"
+args.output_directory = "output/figures/svae_qualitative_composite"
 args.job_id = "231017-22161497"
 path_out = Path(args.output_directory) / args.job_id
 

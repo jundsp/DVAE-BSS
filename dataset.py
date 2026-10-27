@@ -539,7 +539,7 @@ class Mixer(torch.nn.Module):
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
-    test_set = RWC(root="/Volumes/JulianSSD/data/RWC_test/")
+    test_set = RWC(root="data/RWC_test/")
 
     data = test_set.__getitem__(500)
     pipeline = AudioPipeline(n_fft=512,n_time=None,hop_length=128,compression=1)

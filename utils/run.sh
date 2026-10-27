@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --account=def-depalle
+#SBATCH --account=def-YOURPI
 #SBATCH --nodes=1             
 #SBATCH --tasks-per-node=1   # Request 1 process per GPU. You will get 1 CPU per process by default. Request more CPUs with the "cpus-per-task" parameter to enable multiple data-loader workers to load data in parallel.
 #SBATCH --cpus-per-task=1  # Cores proportional to GPUs: 6 on Cedar, 10 on Béluga, 16 on Graham.
@@ -8,9 +8,9 @@
 
 # module load python/3.8
 
-DATADIR=~/projects/def-depalle/jneri/data
-# SOURCEDIR=~/projects/def-depalle/jneri/GitHub/svae-bss
-# OUTPUTDIR=/home/jneri/projects/def-depalle/jneri/output/SVAE
+DATADIR=data
+# SOURCEDIR=.
+# OUTPUTDIR=output/svae
 
 # # Prepare virtualenv
 # virtualenv --no-download $SLURM_TMPDIR/env

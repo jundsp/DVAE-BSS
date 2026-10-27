@@ -30,12 +30,12 @@ def walk_files(root, suffix, prefix=False, remove_suffix=False):
 parser = argparse.ArgumentParser(description='DSAE Example')
 
 
-parser.add_argument('--data-path', type=str, default='/home/jneri/projects/def-depalle/jneri/data/MUSDB-stems', metavar='N',
+parser.add_argument('--data-path', type=str, default='data/MUSDB-stems', metavar='N',
                     help='input batch size for training (default: 512)')
 args = parser.parse_args()
 
 data_path = Path(args.data_path)
-out_path = Path('/home/jneri/projects/def-depalle/jneri/data/MUSDB')
+out_path = Path('data/MUSDB')
 audio_path = 'train'
 input_path = data_path.joinpath(audio_path)
 output_path =out_path.joinpath("train")

@@ -54,7 +54,7 @@ def split_wav(x, fs, min_dur=.1, thresh=-100,L=500):
 # #%%
 args = parser.parse_args()
 
-data_path = Path('/home/jneri/projects/def-depalle/jneri/data').resolve()
+data_path = Path('data').resolve()
 dataset = 'RWC'
 input_path = data_path.joinpath(dataset)
 output_path =data_path.joinpath(dataset + '_stems')

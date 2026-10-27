@@ -10,7 +10,7 @@ import torchaudio
 dataset = ['RWC_dataset','VCTK','MUMS']
 idxs = {'train': [], 'validate': [],'test': []}
 
-data_path = Path('/home/jneri/projects/def-depalle/jneri/data')
+data_path = Path('data')
 output_path = data_path.joinpath("composite")
 os.makedirs(output_path,exist_ok=True)
 

@@ -17,11 +17,11 @@ import re
 import shutil
 import json
 
-model_path = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC/compression/K5/230122-13058078/")
+model_path = Path("output/svae/RWC/compression/K5/230122-13058078/")
 model_filename = model_path / "svae_RWC_S2_K5_L1_pooled_D256_C5-10.pt"
 
-path_out = Path("/Users/julian/Documents/Code/Python/Results/SVAE/ASA")
-path_audio_out = Path("/Volumes/JulianSSD/research/svae-bss/twotone") / "audio"
+path_out = Path("output/svae/ASA")
+path_audio_out = Path("output/svae/twotone") / "audio"
 os.makedirs(path_out,exist_ok=True)
 os.makedirs(path_audio_out,exist_ok=True)
 
@@ -47,7 +47,7 @@ nfft = 512
 averaged = False
 dim_data = nfft//2+1
 
-test_set = AuditoryStreams(root="/Users/julian/Documents/Code/data/dataset_harmonic/")
+test_set = AuditoryStreams(root="data/dataset_harmonic/")
 test_loader = torch.utils.data.DataLoader(test_set, batch_size=16,shuffle=False)
 
 #%% LOAD MODEL

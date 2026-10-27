@@ -16,7 +16,7 @@ def walk_files(root, suffix, prefix=False, remove_suffix=False):
                     fname = os.path.join(root, dirName,fname)
                 yield fname, descr
 
-data_path = Path('/home/jneri/projects/def-depalle/jneri/data/MUSDB')
+data_path = Path('data/MUSDB')
 audio_path = 'train'
 input_path = data_path.joinpath(audio_path)
 output_path = data_path
@@ -54,7 +54,7 @@ for key in idxs:
 # %%
 
 
-# data_path = Path('/home/jneri/projects/def-depalle/jneri/data/MUMS')
+# data_path = Path('data/MUMS')
 # audio_path = 'wav16'
 # input_path = data_path.joinpath(audio_path)
 # output_path = data_path

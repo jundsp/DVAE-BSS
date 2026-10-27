@@ -13,9 +13,9 @@ from pathlib import Path
 
 args = parser.parse_args(args=[])
 
-args.model_directory = "/Volumes/JulianSSD/research/svae-bss/output/RWC/saves/ablation_targets"
-args.output_directory = "/Volumes/JulianSSD/research/svae-bss/evaluation/NSYNTH_test/ablation_targets"
-args.data_directory = "/Volumes/JulianSSD/data/NSYNTH_test"
+args.model_directory = "output/svae/RWC/saves/ablation_targets"
+args.output_directory = "output/svae/evaluation/NSYNTH_test/ablation_targets"
+args.data_directory = "data/NSYNTH_test"
 args.job_id = "231017-22161497"
 path_data = Path(args.data_directory) 
 path_model = Path(args.model_directory) / args.job_id

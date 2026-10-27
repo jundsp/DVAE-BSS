@@ -207,7 +207,7 @@ class Chain(object):
 #%%
 torch.manual_seed(1)
 np.random.seed(1)
-dataset = Audioset(root='/Users/julian/Desktop/RWC_small',duration=8,silence=.2,augment_levels=False)
+dataset = Audioset(root='data/RWC_small',duration=8,silence=.2,augment_levels=False)
 dataloader = torch.utils.data.DataLoader(dataset,batch_size=8,shuffle=True)
 
 #%%
@@ -227,5 +227,5 @@ for i in range(4):
     ax[i%2, i//2].imshow(mag2db(X[i]),aspect='auto',origin='lower',cmap='jet')
 
 # %%
-torchaudio.save('/Users/julian/Desktop/rwc_example_loaded.wav',x[3].view(1,-1),16000)
+torchaudio.save('output/rwc_example_loaded.wav',x[3].view(1,-1),16000)
 # %%

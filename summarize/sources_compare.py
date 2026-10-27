@@ -1,5 +1,5 @@
 import os
-os.sys.path.append(r"/Users/julian/Documents/GitHub/svae-bss/")
+os.sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 import torch
 from utils.utils import load_state_dict, optimal_permute
@@ -59,13 +59,13 @@ def plot_spectrogram(y,ax=None,**kwds):
     ax.set_ylim(0)
 
 K = 5
-path = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC/sources/K{}/".format(K))
+path = Path("output/svae/RWC/sources/K{}/".format(K))
 name =  "svae_rwc_K{}_c5.pt".format(K)
 model = get_model(path,name)
 model.eval()
 
 
-dataset = get_dataset(path=Path("/Volumes/JulianSSD/data/NSYNTH_test"))
+dataset = get_dataset(path=Path("data/NSYNTH_test"))
 
 torch.manual_seed(7)
 with torch.no_grad():

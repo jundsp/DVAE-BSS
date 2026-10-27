@@ -1,22 +1,18 @@
-certifi
-chardet
-idna
 numpy
 scipy
-Pillow
-requests
-six
-tqdm
-urllib3
-matplotlib
-future
 torch
-torchvision
 torchaudio
+torchvision
 tensorboard
 soundfile
-pathlib
-pandas
-seaborn
 librosa
-# samplerate
+pandas
+matplotlib
+seaborn
+tqdm
+
+# optional: spectrogram plots in infer.py and summarize/qualitative.py
+# sines @ git+https://github.com/jundsp/sines.git
+# optional: MUSDB stem conversion in utils/resampler.py
+# stempeg
+# optional: NMF baseline in baseline_traditional.py needs the NMF Toolbox (AudioLabs Erlangen)

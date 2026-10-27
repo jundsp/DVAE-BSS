@@ -15,9 +15,9 @@ plt.style.use("gibbs.mplstyles.latex")
 
 args = parser.parse_args(args=[])
 
-args.model_directory = "/Users/julian/Documents/Code/output/svae/RWC/mixit"
-args.data_directory = "/Users/julian/Documents/Code/data/TwoNote"
-args.output_directory = "/Users/julian/Documents/Code/data/TwoNote/baselines/mixit"
+args.model_directory = "output/svae/RWC/mixit"
+args.data_directory = "data/TwoNote"
+args.output_directory = "data/TwoNote/baselines/mixit"
 
 args.job_id = "231106-22715625"
 path_data = Path(args.data_directory) 

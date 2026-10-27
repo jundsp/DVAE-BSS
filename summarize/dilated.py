@@ -1,6 +1,6 @@
 #%%
 import os
-os.sys.path.append(r"/Users/julian/Documents/GitHub/svae-bss/")
+os.sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 import torch
 from utils.utils import load_state_dict, optimal_permute
@@ -66,12 +66,12 @@ def plot_spectrogram(y,ax=None,**kwds):
     ax.set_ylim(0)
 
 K = 4
-path = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC/dilated/230208-13576125")
+path = Path("output/svae/RWC/dilated/230208-13576125")
 name =  "svae_RWC_S2_K4_L1_pooled_D16_C5-10.pt"
 model = get_model(path,name)
 
 T = 8
-dataset = get_dataset(path=Path("/Volumes/JulianSSD/data"),duration=T,batch_size=2,name='RWC')
+dataset = get_dataset(path=Path("data"),duration=T,batch_size=2,name='RWC')
 
 # torch.manual_seed(7)
 with torch.no_grad():

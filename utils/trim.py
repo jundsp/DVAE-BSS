@@ -23,7 +23,7 @@ def walk_files(root, suffix, prefix=False, remove_suffix=False):
                 yield fname, descr
 
 parser = argparse.ArgumentParser(description='DSAE Example')
-parser.add_argument('--data-path', type=str, default='/home/jneri/projects/def-depalle/jneri/data/nsynth/nsynth-test', metavar='N',
+parser.add_argument('--data-path', type=str, default='data/nsynth/nsynth-test', metavar='N',
                     help='input batch size for training (default: 512)')
 args = parser.parse_args()
 

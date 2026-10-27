@@ -13,7 +13,7 @@ from pathlib import Path
 
 plt.style.use('gibbs.mplstyles.latex')
 
-root = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC_test/sources/")
+root = Path("output/svae/RWC_test/sources/")
 output_directory = root / "results"
 os.makedirs(output_directory,exist_ok=True)
   

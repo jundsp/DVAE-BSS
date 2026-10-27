@@ -10,8 +10,8 @@ from pathlib import Path
 
 args = parser.parse_args()
 
-args.data_directory = "/Users/julian/Documents/Code/data/TwoNote"
-args.output_directory = "/Users/julian/Documents/Code/data/TwoNote/baselines"
+args.data_directory = "data/TwoNote"
+args.output_directory = "data/TwoNote/baselines"
 path_data = Path(args.data_directory) 
 path_out = Path(args.output_directory)
 

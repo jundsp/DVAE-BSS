@@ -41,10 +41,10 @@ parser.add_argument('--lr', type=float, default=.001, metavar='fname',
                     help='learnrate')
 parser.add_argument('--n-time', type=int, default=513, metavar='N',
                     help='Time frames')
-parser.add_argument('--data-directory', type=str, default='/Volumes/JulianSSD/data', metavar='fname',
+parser.add_argument('--data-directory', type=str, default='data', metavar='fname',
                     help='Folder containing the spectrogram data')
-parser.add_argument('--output-directory', type=str, default='/Users/julian/Documents/Code/Python/Results/SVAE', metavar='fname', help='Folder to save output data')
-parser.add_argument('--model-directory', type=str, default='/Users/julian/Documents/Code/Python/Results/SVAE/RWC/compression/K5/', metavar='fname',help='Folder that has models.')
+parser.add_argument('--output-directory', type=str, default='output/svae', metavar='fname', help='Folder to save output data')
+parser.add_argument('--model-directory', type=str, default='output/svae/RWC/compression/K5/', metavar='fname',help='Folder that has models.')
 parser.add_argument('--net-type', type=str, default='pooled', metavar='fname',
                     help='name of the dataset')
 parser.add_argument('--num-layers', type=int, default=1, metavar='fname',

@@ -20,7 +20,7 @@ plt.rcParams.update({
 })
 
 
-path = Path("/Users/julian/Documents/Code/output/svae/baselines/TwoNote")
+path = Path("output/svae/baselines/TwoNote")
 
 suffix = "_ICA"
 fname = path / 'results{}.json'.format(suffix)

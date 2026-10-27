@@ -14,7 +14,7 @@ plt.style.use('gibbs.mplstyles.latex')
 
 # sns.set()
 
-root = Path("/Users/julian/Documents/Code/Python/Results/SVAE/RWC_test/variance/")
+root = Path("output/svae/RWC_test/variance/")
 output_directory = root / "results"
 os.makedirs(output_directory,exist_ok=True)
   
