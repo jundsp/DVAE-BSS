@@ -38,19 +38,31 @@ def save_checkpoint(
 
 def audio_config(stft: CompressedSTFT) -> dict[str, Any]:
     """Front-end settings needed to reproduce the model's input."""
-    return dict(n_fft=stft.n_fft, hop_length=stft.hop_length, compression=stft.compression)
+    return dict(
+        n_fft=stft.n_fft,
+        hop_length=stft.hop_length,
+        compression=stft.compression,
+        sample_rate=stft.sample_rate,
+    )
+
+
+def read_checkpoint(
+    path: str | Path, map_location: str | torch.device = "cpu"
+) -> tuple[DVAE, CompressedSTFT, dict[str, Any]]:
+    """Rebuild the model and front end saved by :func:`save_checkpoint`, plus its ``extra``."""
+    blob = torch.load(path, map_location=map_location, weights_only=True)
+    if blob.get("format") != FORMAT_VERSION:
+        raise ValueError(f"{path} is not a dvae-bss checkpoint (use load_legacy for old ones)")
+    model = DVAE(**blob["model"])
+    model.load_state_dict(blob["state_dict"])
+    return model, CompressedSTFT(**blob["audio"]), blob["extra"]
 
 
 def load_checkpoint(
     path: str | Path, map_location: str | torch.device = "cpu"
 ) -> tuple[DVAE, CompressedSTFT]:
     """Rebuild the model and front end saved by :func:`save_checkpoint`."""
-    blob = torch.load(path, map_location=map_location, weights_only=True)
-    if blob.get("format") != FORMAT_VERSION:
-        raise ValueError(f"{path} is not a dvae-bss checkpoint (use load_legacy for old ones)")
-    model = DVAE(**blob["model"])
-    model.load_state_dict(blob["state_dict"])
-    return model, CompressedSTFT(**blob["audio"])
+    return read_checkpoint(path, map_location)[:2]
 
 
 def clean_state_dict(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
@@ -123,3 +135,20 @@ def load_legacy(
     model.load_state_dict(clean_state_dict(state_dict))
     stft = CompressedSTFT(n_fft=512, hop_length=128, compression=args.get("compression", 1.0))
     return model, stft
+
+
+def load_model(
+    path: str | Path,
+    legacy_configuration: str | Path | None = None,
+    map_location: str | torch.device = "cpu",
+) -> tuple[DVAE, CompressedSTFT]:
+    """Load either checkpoint format.
+
+    A file written by :func:`save_checkpoint` needs nothing else. A bare state dict from the
+    dissertation code is read with :func:`load_legacy`, using ``legacy_configuration`` or the
+    ``configuration.txt`` next to it.
+    """
+    blob = torch.load(path, map_location=map_location, weights_only=True)
+    if isinstance(blob, dict) and blob.get("format") == FORMAT_VERSION:
+        return load_checkpoint(path, map_location)
+    return load_legacy(path, legacy_configuration, map_location)

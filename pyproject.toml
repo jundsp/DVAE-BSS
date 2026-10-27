@@ -19,10 +19,15 @@ dependencies = [
     "tqdm",
 ]
 
+[project.scripts]
+dvae-train = "dvae_bss.cli.train:main"
+dvae-separate = "dvae_bss.cli.separate:main"
+dvae-evaluate = "dvae_bss.cli.evaluate:main"
+
 [project.optional-dependencies]
 plots = ["matplotlib"]
 experiments = ["matplotlib", "pandas", "scikit-learn", "seaborn"]
-dev = ["pytest", "ruff"]
+dev = ["matplotlib", "pytest", "ruff"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

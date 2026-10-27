@@ -40,10 +40,19 @@ class CompressedSTFT(nn.Module):
         hop_length: Hop between frames (samples). Must be at most ``n_fft // 4`` for the
             overlap-add gain in :meth:`synthesis` to be exact.
         compression: Exponent ``c`` applied to the STFT magnitude.
+        sample_rate: Sample rate (Hz) the model operates at; informational, used to
+            resample inputs.
     """
 
-    def __init__(self, n_fft: int = 512, hop_length: int = 128, compression: float = 0.5) -> None:
+    def __init__(
+        self,
+        n_fft: int = 512,
+        hop_length: int = 128,
+        compression: float = 0.5,
+        sample_rate: int = 16000,
+    ) -> None:
         super().__init__()
+        self.sample_rate = sample_rate
         self.n_fft = n_fft
         self.hop_length = hop_length
         self.compression = compression

@@ -128,14 +128,25 @@ class DVAE(nn.Module):
         stride = stride or ((2, 2) if encoder == "strided" else (2, 1))
         layer_channels = tuple(layer_channels)
         self.config: dict[str, Any] = dict(
-            n_freq=n_freq, latent_dim=latent_dim, rnn_dim=rnn_dim, num_sources=num_sources,
-            encoder=encoder, layer_channels=list(layer_channels), kernel_size=list(kernel_size),
-            stride=list(stride), padding=list(padding), rnn_type=rnn_type, rnn_layers=rnn_layers,
-            inference_rnn=inference_rnn, variance=variance,
-            activate_final_layer=activate_final_layer, autoencoder=autoencoder,
+            n_freq=n_freq,
+            latent_dim=latent_dim,
+            rnn_dim=rnn_dim,
+            num_sources=num_sources,
+            encoder=encoder,
+            layer_channels=list(layer_channels),
+            kernel_size=list(kernel_size),
+            stride=list(stride),
+            padding=list(padding),
+            rnn_type=rnn_type,
+            rnn_layers=rnn_layers,
+            inference_rnn=inference_rnn,
+            variance=variance,
+            activate_final_layer=activate_final_layer,
+            autoencoder=autoencoder,
             separator_kernel_size=separator_kernel_size,
-            separator_layers=separator_layers, separator_channels=separator_channels,
-        )  # fmt: skip
+            separator_layers=separator_layers,
+            separator_channels=separator_channels,
+        )
 
         self.n_freq = n_freq
         self.latent_dim = latent_dim
@@ -181,11 +192,13 @@ class DVAE(nn.Module):
             )
             self.fc_encoder = nn.Sequential(
                 nn.Conv1d(
-                    encoded_features, feature_dim * num_sources, separator_kernel_size,
+                    encoded_features,
+                    feature_dim * num_sources,
+                    separator_kernel_size,
                     padding=separator_kernel_size // 2,
                 ),
                 nn.LeakyReLU(),
-            )  # fmt: skip
+            )
             self.fc_decoder = nn.Sequential(
                 nn.ConvTranspose1d(latent_dim, encoded_features, kernel_size=1),
                 nn.LeakyReLU(),

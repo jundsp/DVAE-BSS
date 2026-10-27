@@ -277,10 +277,15 @@ class StridedDilatedDecoder(nn.Module):
         ]
         layers.append(
             ConvTranspose2dLayer(
-                layer_channels[0], out_channels, padding=paddings[0], dilation=dilations[0],
-                batchnorm=False, activation=activate_final_layer, **kwds,
+                layer_channels[0],
+                out_channels,
+                padding=paddings[0],
+                dilation=dilations[0],
+                batchnorm=False,
+                activation=activate_final_layer,
+                **kwds,
             )
-        )  # fmt: skip
+        )
         self.Network = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
