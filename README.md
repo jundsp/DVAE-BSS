@@ -35,6 +35,20 @@ is meant for a GPU.
 
 ## Usage
 
+### Quick start
+
+The repository includes the model trained for the dissertation
+([`pretrained/`](pretrained/README.md)) and an example mixture of two notes. Run this from the
+repository root:
+
+```bash
+dvae-separate examples/mixture.wav --plot
+```
+
+This writes the five outputs to `separated/`: two of them hold one note each, and the other
+three are silent. The model was trained on instrument notes at 16 kHz and works best on similar
+mixtures (see the model card for its limitations).
+
 ### Train
 
 Training needs only a folder of isolated sounds, for example single instrument notes at
@@ -74,8 +88,8 @@ from dvae_bss.data import read_audio
 
 model, stft = load_model("runs/k5/model.pt")
 separator = Separator(model.eval(), stft)
-mixture = read_audio("mixture.wav")   # mono, resampled to 16 kHz, shape (samples,)
-sources = separator(mixture[None])    # shape (1, K, samples)
+mixture = read_audio("mixture.wav")  # mono, resampled to 16 kHz, shape (samples,)
+sources = separator(mixture[None])  # shape (1, K, samples)
 ```
 
 ### Evaluate
@@ -88,8 +102,8 @@ A test set is a folder with `mix.json` and `audio/` (see `PremixedDataset` in
 [`data.py`](src/dvae_bss/data.py));
 [`experiments/data_prep/make_test_set.py`](experiments/data_prep/make_test_set.py) builds one
 from a folder of isolated sounds. Each true source is matched to the closest estimate (minimum
-L1 distance between waveforms), and the matches are scored with SI-SDR, SIR and SAR. The command writes one
-record per source to `results.json` and the averages to `summary.json`.
+L1 distance between waveforms), and the matches are scored with SI-SDR, SIR and SAR. The
+command writes one record per source to `results.json` and the averages to `summary.json`.
 
 ### Checkpoints from the dissertation code
 
@@ -134,8 +148,14 @@ sources; Mix is the unprocessed mixture.
 | | SIR | 0.01 | 35.16 | 41.69 | 35.95 |
 | | SAR | 79.09 | 11.64 | 17.11 | 17.28 |
 
-Datasets are not included: RWC is not freely redistributable, and NSynth is available from
-Magenta. [`experiments/`](experiments/README.md) has the scripts for the baselines and for every
+The [pretrained model](pretrained/README.md) reproduces these runs: re-measured on the TwoNote
+set of synthetic two-note mixtures, it matches the original code per mixture (mean SI-SDR
+11.35 dB).
+
+Datasets are not included. The
+[RWC Instruments Database](https://doi.org/10.5281/zenodo.17170844) (CC BY-NC 4.0) and
+[NSynth](https://magenta.tensorflow.org/datasets/nsynth) are available online.
+[`experiments/`](experiments/README.md) has the scripts for the baselines and for every
 results figure of the chapter (compression, number of sources, variance, per-instrument and
 pitch/time breakdowns, feature maps), and a table of which script produces which figure.
 
@@ -147,6 +167,8 @@ pitch/time breakdowns, feature maps), and a table of which script produces which
 | [`src/dvae_bss/cli/`](src/dvae_bss/cli) | `dvae-train`, `dvae-separate`, `dvae-evaluate` |
 | [`experiments/`](experiments) | baselines (ideal masks, ICA/NMF, MixIT), figure scripts, data preparation |
 | [`scripts/slurm_train.sh`](scripts/slurm_train.sh) | multi-GPU training on a Slurm cluster |
+| [`pretrained/`](pretrained/README.md) | the dissertation's RWC model (`K = 5`) and its model card |
+| [`examples/`](examples/README.md) | a two-note example mixture |
 | [`tests/`](tests) | unit tests, CLI tests on synthetic audio, and equivalence tests against the original code |
 
 ## Differences from the dissertation code
@@ -196,4 +218,5 @@ The full suite runs on CPU in under a minute.
 
 ## License
 
-GPL-3.0. See [LICENSE](LICENSE).
+Code: GPL-3.0, see [LICENSE](LICENSE). The pretrained weights are CC BY-NC 4.0, following
+the licence of their RWC training data (see the [model card](pretrained/README.md#licence)).
