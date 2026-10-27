@@ -44,3 +44,4 @@ convention = "google"
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["D"]
 "experiments/*" = ["D103"]
+"src/dvae_bss/layers.py" = ["D102"]  # forward() of small building blocks

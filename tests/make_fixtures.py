@@ -43,7 +43,8 @@ def tensors(output: dict) -> dict:
 def capture_model(old, name: str, cls, config: dict, x: torch.Tensor, wave: torch.Tensor) -> dict:
     torch.manual_seed(0)
     model = cls(**config)
-    entry = {"cls": name, "config": config, "state_dict": model.state_dict(), "x": x}
+    initial = {k: v.clone() for k, v in model.state_dict().items()}
+    entry = {"cls": name, "config": config, "state_dict": initial, "x": x}
 
     model.train()
     for stochastic in (True, False):
@@ -58,7 +59,7 @@ def capture_model(old, name: str, cls, config: dict, x: torch.Tensor, wave: torc
         entry[f"loss_{label}"] = (ell.item(), kld.item())
 
     # Optimisation trajectory from the same initial weights.
-    model.load_state_dict(entry["state_dict"])
+    model.load_state_dict(initial)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=2e-5)
     lossfun = old.LossFunction(scale_invariant=True)
     torch.manual_seed(11)
@@ -71,11 +72,13 @@ def capture_model(old, name: str, cls, config: dict, x: torch.Tensor, wave: torc
         trajectory.append((ell.item(), kld.item()))
     entry["train_trajectory"] = trajectory
 
-    model.load_state_dict(entry["state_dict"])
+    model.load_state_dict(initial)
     model.eval()
     with torch.no_grad():
         entry["forward_eval"] = tensors(model(x, stochastic=False))
-        separator = old.Separator(model, compression=COMPRESSION, n_fft=N_FFT, hop_length=HOP, mask=True)
+        separator = old.Separator(
+            model, compression=COMPRESSION, n_fft=N_FFT, hop_length=HOP, mask=True
+        )
         entry["separator_out"] = separator(wave)
         spec = separator.preprocess(wave)
         entry["separator_preprocess"] = spec
@@ -86,7 +89,9 @@ def capture_model(old, name: str, cls, config: dict, x: torch.Tensor, wave: torc
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--orig", type=Path, required=True, help="worktree of dissertation-2024")
-    parser.add_argument("--out", type=Path, default=Path(__file__).parent / "fixtures" / "golden.pt")
+    parser.add_argument(
+        "--out", type=Path, default=Path(__file__).parent / "fixtures" / "golden.pt"
+    )
     args = parser.parse_args()
 
     np.float = float  # the original code predates its removal from NumPy

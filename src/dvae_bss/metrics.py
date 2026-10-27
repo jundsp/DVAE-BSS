@@ -1,174 +1,127 @@
-#%%
+"""Source-separation metrics: SI-SDR, SIR and SAR with permutation-invariant matching.
+
+Estimates are first matched to the references with the Hungarian algorithm, then each
+reference is rescaled to the estimate's gain (scale invariance), then BSS-eval style
+projections give the signal-to-distortion/interference/artifact ratios.
+"""
+
+from __future__ import annotations
+
 import numpy as np
 import torch
-import torch.nn.functional as F
-from torch.nn import Fold
-import scipy.signal as sig
 from scipy.optimize import linear_sum_assignment
-from collections import OrderedDict
 
-def db2mag(x):
-	return torch.pow(torch.ones_like(x)*10.0,x/20.0)
+EPS = 1e-12
 
-def mag2db(x):
-    return 20.0*torch.log10(torch.abs(x))
 
-def torchToNumpy(x):
-    return x.detach().cpu().numpy()
-    
-def complex_to_mag(x:torch.tensor,axis=1):
-    return (x ** 2).sum(axis) ** .5
-def complex_to_mag(x:torch.tensor,axis=1):
-    return (x ** 2).sum(axis) ** .5
+def optimal_permute(
+    estimates: torch.Tensor, targets: torch.Tensor
+) -> tuple[torch.Tensor, np.ndarray]:
+    """Reorder estimates to best match the targets (minimum summed L1 distance).
 
-def complex_to_phase(x:torch.tensor,axis=1):
-    return .001*unwrap(torch.atan2(torch.select(x,axis,0),torch.select(x,axis,1)))
+    Args:
+        estimates: ``(B, K_est, L)`` estimated waveforms.
+        targets: ``(B, K_ref, L)`` reference waveforms, ``K_est >= K_ref``.
 
-def complex_to_polar(x:torch.tensor,axis=1):
-    return torch.stack([complex_to_mag(x,axis),complex_to_phase(x,axis)],axis)
-def complex_to_polar_activated(x:torch.tensor,axis=1):
-    return torch.stack([x[:,0],unwrap(x[:,1])],axis)
-
-def unwrap(phi, dim=-1):
-    assert dim is -1, "unwrap only supports dim=-1 for now"
-    dphi = diff(phi, same_size=True)
-    dphi_m = ((dphi+np.pi) % (2 * np.pi)) - np.pi
-    dphi_m[(dphi_m==-np.pi)&(dphi>0)] = np.pi
-    phi_adj = dphi_m-dphi
-    phi_adj[dphi.abs()<np.pi] = 0
-    return phi + phi_adj.cumsum(dim)
-
-def diff(x, dim=-1, same_size=False):
-    assert dim is -1, "diff only supports dim=-1 for now"
-    if same_size:
-        return F.pad(x[...,1:]-x[...,:-1], (1,0))
-    else:
-        return x[...,1:]-x[...,:-1]
-
-def optimal_permute(y,x):
-    n = x.size(0)
-    nx = x.size(1)
-    ny = y.size(1)
-    out = torch.zeros_like(y)
-    perm = np.zeros((n,ny)).astype(int)
+    Returns:
+        The reordered estimates, shape ``(B, K_est, L)``, with the matched estimates first
+        and the unmatched ones after them, and the permutation indices ``(B, K_est)``.
+    """
+    n, k_est, k_ref = estimates.shape[0], estimates.shape[1], targets.shape[1]
+    cost = torch.cdist(estimates, targets, p=1).detach().cpu().numpy()
+    perm = np.zeros((n, k_est), dtype=int)
     for i in range(n):
-        cost = torch.zeros(ny,nx)
-        for j in range(ny):
-            cost[j] = (y[i,j].unsqueeze(0) - x[i,:]).abs().sum(-1)
-
-        _, col_ind = linear_sum_assignment(cost.detach().numpy().T)
-        
-        out[i,:nx] = y[i,col_ind]
-        perm[i,:nx] = col_ind
-        if ny > nx:
-            k = np.arange(ny)
-            k_rem = np.array(list(set(k) - set(col_ind)))
-            out[i,nx:] = y[i,k_rem]
-            perm[i,nx:] = k_rem
-
+        matched = linear_sum_assignment(cost[i].T)[1]
+        unmatched = sorted(set(range(k_est)) - set(matched))
+        perm[i, :k_ref] = matched
+        perm[i, k_ref:] = unmatched
+    index = torch.from_numpy(perm).to(estimates.device)
+    out = torch.gather(estimates, 1, index.unsqueeze(-1).expand(-1, -1, estimates.shape[-1]))
     return out, perm
 
 
-def panning(nsrc):
-    pspace = np.linspace(-1,1,nsrc)
-    no = nsrc//2
-    ne = nsrc - no
-    e = pspace[:ne]
-    o = pspace[ne:][::-1]
+def make_scale_invariant(estimates: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    """Scale each target by the gain that best fits the matching estimate."""
+    estimates = estimates[:, : targets.shape[1]]
+    energy = (targets * targets).sum(-1)
+    gain = (estimates * targets).sum(-1) / (energy + EPS)
+    return targets * gain.unsqueeze(-1)
 
-    pans = np.zeros(nsrc)
-    pans[::2] = e
-    pans[1::2] = o
-    pans += 1.0
-    pans /= 2.0
-    return pans
 
-def ideal_masks(stft_sources,alpha=1):
-    eps = np.finfo(np.float).eps
-    # compute spectrogram of target source
-    stft_mix = stft_sources.sum(1).unsqueeze(1)
-    X = stft_mix.abs() ** alpha
-    S = stft_sources.abs() ** alpha
-    model = S.sum(1).unsqueeze(1) + eps
-    Mask = S / model
-    Y = X * Mask
-    Y_binary = X * Mask.round()
-    phase_part = torch.exp(1j*stft_mix.angle())
-    Y = Y * phase_part
-    Y_binary = Y_binary * phase_part
-    return Y, Y_binary
+def compute_measures_batch(
+    estimates: torch.Tensor, targets: torch.Tensor, salt: float = EPS
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """SDR, SIR and SAR (dB) of each estimate against all targets.
 
-def load_state_dict(path,device="cpu"):
-    # original saved file with DataParallel
-    state_dict = torch.load(path,map_location=torch.device(device))
-    # create new OrderedDict that does not contain `module.`
-    
-    new_state_dict = OrderedDict()
-    for k, v in state_dict.items():
-        name = k
-        if 'module.' == name[:7]:
-            name = name[7:] # remove `module.`
-        new_state_dict[name] = v
-    
-    return new_state_dict
+    Args:
+        estimates: ``(B, K, L)`` estimates, already matched to the targets.
+        targets: ``(B, K, L)`` references, scaled by :func:`make_scale_invariant`.
+        salt: Small constant that keeps the projections and logarithms finite.
 
-def make_scale_invariant(estimates,targets):
+    Returns:
+        Three ``(B, K)`` tensors: SDR (equal to SI-SDR for scaled targets), SIR, SAR.
+    """
     k = targets.shape[1]
-    estimates = estimates[:,:k]
-    Rss = (targets * targets).sum(-1)
-    alpha = (estimates * targets).sum(-1) / Rss
-    return targets * alpha.unsqueeze(-1)
+    gram = targets @ targets.transpose(-1, -2) + torch.eye(k, device=targets.device) * salt
+    measures = [_measures_for_source(estimates[:, j], targets, gram, j, salt) for j in range(k)]
+    sdr, sir, sar = (torch.stack(m, dim=1) for m in zip(*measures, strict=True))
+    return sdr, sir, sar
 
-def compute_measures_batch(estimates, targets, salt=1e-12):
 
-    n = targets.shape[0]
-    k = targets.shape[1]
-    
-    SDR = torch.zeros(n,k,device=estimates.device)
-    SIR = torch.zeros(n,k,device=estimates.device)
-    SAR = torch.zeros(n,k,device=estimates.device)
+def _measures_for_source(
+    estimate: torch.Tensor, targets: torch.Tensor, gram: torch.Tensor, j: int, salt: float
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    target = targets[:, j]
+    residual = estimate - target
+    # Project the residual on all targets; the projection is the interference.
+    cross = (residual.unsqueeze(1) * targets).sum(-1)
+    coefficients = torch.linalg.solve(gram, cross)
+    interference = (targets * coefficients.unsqueeze(-1)).sum(1)
+    artifacts = residual - interference
 
-    Rss = torch.zeros(n,k,k,device=estimates.device)
-    I = torch.eye(k,device=estimates.device)*salt
-    for ii in range(n):
-        Rss[ii] = (targets[ii] @ targets[ii].T + I)
-    
-    for jj in range(k):
-        SDR[:,jj], SIR[:,jj], SAR[:,jj] = compute_measures_batch_one(estimates=estimates[:,jj],targets=targets,Rss=Rss,j=jj,salt=salt)
+    def energy(x: torch.Tensor) -> torch.Tensor:
+        return (x * x).sum(-1) + salt
 
-    return SDR, SIR, SAR
+    e_target = energy(target)
+    return (
+        10 * (e_target.log10() - energy(residual).log10()),
+        10 * (e_target.log10() - energy(interference).log10()),
+        10 * (e_target.log10() - energy(artifacts).log10()),
+    )
 
-def compute_measures_batch_one(estimates, targets, Rss, j, salt=1e-14):
-    e_true = targets[:,j] 
-    # Get the SIR
-    e_res= estimates - e_true
-    Rsr = (e_res.unsqueeze(1) * targets).sum(-1)
-    b = torch.linalg.solve(Rss,Rsr)
 
-    e_interf = (targets * b.unsqueeze(-1)).sum(1)
-    e_artif = e_res - e_interf
+def bss_metrics(estimates: torch.Tensor, targets: torch.Tensor) -> dict[str, torch.Tensor]:
+    """Permutation- and scale-invariant SI-SDR, SIR and SAR of a batch.
 
-    E_target = (e_true*e_true).sum(-1) + salt
-    E_residual = (e_res*e_res).sum(-1) + salt
-    E_interf = (e_interf*e_interf).sum(-1) + salt
-    E_artif = (e_artif*e_artif).sum(-1) + salt
+    Args:
+        estimates: ``(B, K_est, L)`` estimated sources (``K_est >= K_ref``).
+        targets: ``(B, K_ref, L)`` reference sources.
 
-    SDR = 10*(E_target.log10() - E_residual.log10())
-    SIR = 10*(E_target.log10() - E_interf.log10())
-    SAR = 10*(E_target.log10() - E_artif.log10())
-    return SDR, SIR, SAR
+    Returns:
+        ``{"sdr", "sir", "sar", "estimates"}`` where the metrics are ``(B, K_ref)`` in dB and
+        ``estimates`` holds the matched estimates.
+    """
+    matched, _ = optimal_permute(estimates, targets)
+    scaled = make_scale_invariant(matched, targets)
+    sdr, sir, sar = compute_measures_batch(matched[:, : targets.shape[1]], scaled)
+    return {"sdr": sdr, "sir": sir, "sar": sar, "estimates": matched}
 
-def receptive_field(kernel_size=3,stride=2):
-    kernel_size = np.atleast_1d(kernel_size)
-    stride = np.atleast_1d(stride)
-    
-    field = np.concatenate([np.atleast_1d(1),kernel_size],0)
-    stride = np.concatenate([np.atleast_1d(1),stride],0)
-    layers = len(field)
-    r = np.zeros(layers).astype(int)
-    
-    r[-1] = 1
-    for i in range(layers-1,0,-1):
-        r[i-1] = stride[i]*r[i] + (field[i]-stride[i])
-    return r
-# %%
+
+def ideal_masks(
+    stft_sources: torch.Tensor, alpha: float = 1.0
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Oracle ratio and binary mask estimates of every source from its true STFT.
+
+    Args:
+        stft_sources: Complex STFTs ``(B, K, F, T)`` of the true sources.
+        alpha: Exponent applied to the magnitudes before forming the mask.
+
+    Returns:
+        Ratio-masked and binary-masked complex STFTs of the mixture, ``(B, K, F, T)``.
+    """
+    mixture = stft_sources.sum(1, keepdim=True)
+    magnitudes = stft_sources.abs() ** alpha
+    mask = magnitudes / (magnitudes.sum(1, keepdim=True) + np.finfo(np.float64).eps)
+    phase = torch.exp(1j * mixture.angle())
+    base = mixture.abs() ** alpha
+    return base * mask * phase, base * mask.round() * phase

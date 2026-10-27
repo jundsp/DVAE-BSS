@@ -11,7 +11,7 @@ import torch.utils.data
 from torchvision import datasets, transforms
 import random
 import pandas as pd
-from .metrics import db2mag, mag2db
+from .audio import db2mag, mag2db
 import torch.nn.functional as F
 import librosa
 from pathlib import Path
