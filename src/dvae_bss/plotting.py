@@ -1,11 +1,59 @@
-"""Spectrogram plots (requires the ``plots`` extra, i.e. matplotlib)."""
+"""Spectrogram plots in the style of the dissertation (requires the ``plots`` extra).
+
+The dissertation's figures used a LaTeX matplotlib style (Computer Modern, 10 pt) and the
+``jet`` colour map for spectrograms. :func:`style` reproduces it with the Computer Modern fonts
+bundled with matplotlib, so LaTeX is not needed unless ``usetex=True``.
+"""
 
 from __future__ import annotations
+
+from typing import Any
 
 import numpy as np
 import torch
 
 from .audio import CompressedSTFT, mag2db
+
+SPECTROGRAM_CMAP = "jet"
+
+
+def style(usetex: bool = False) -> dict[str, Any]:
+    """Matplotlib settings of the dissertation figures.
+
+    Use with ``plt.rcParams.update(style())`` or ``matplotlib.rc_context(style())``.
+
+    Args:
+        usetex: Typeset text with LaTeX, as the dissertation did (needs a LaTeX install).
+    """
+    params: dict[str, Any] = {
+        "figure.dpi": 150,
+        "savefig.dpi": 150,
+        "lines.linewidth": 1,
+        "legend.fontsize": 10,
+        "legend.frameon": False,
+        "image.interpolation": "none",
+        "image.aspect": "auto",
+        "image.origin": "lower",
+        "font.family": "serif",
+        "font.size": 10,
+        "axes.titlesize": 10,
+        "axes.labelsize": 10,
+        "axes.linewidth": 1.0,
+        "axes.grid": False,
+        "axes.facecolor": "white",
+        "figure.facecolor": "white",
+    }
+    if usetex:
+        params["text.usetex"] = True
+    else:
+        # cmr10 has no Unicode minus sign, so tick labels go through mathtext.
+        params |= {
+            "font.serif": ["cmr10", "DejaVu Serif"],
+            "mathtext.fontset": "cm",
+            "axes.formatter.use_mathtext": True,
+            "axes.unicode_minus": False,
+        }
+    return params
 
 
 def spectrogram_db(
@@ -29,7 +77,12 @@ def spectrogram_db(
 
 
 def plot_spectrogram(  # noqa: ANN201
-    ax, wave, sample_rate: int = 16000, dynamic_range: float = 80.0, vmax: float | None = None
+    ax,
+    wave,
+    sample_rate: int = 16000,
+    dynamic_range: float = 100.0,
+    vmax: float | None = None,
+    cmap: str = SPECTROGRAM_CMAP,
 ):
     """Draw a spectrogram on ``ax``; colours span ``dynamic_range`` dB below ``vmax``.
 
@@ -40,6 +93,7 @@ def plot_spectrogram(  # noqa: ANN201
         dynamic_range: Range of the colour scale (dB).
         vmax: Top of the colour scale in dB; default: the spectrogram's own peak. Pass the
             same value to several panels to make them comparable.
+        cmap: Matplotlib colour map.
     """
     spec, times, freqs = spectrogram_db(wave, sample_rate)
     vmax = spec.max() if vmax is None else vmax
@@ -47,7 +101,7 @@ def plot_spectrogram(  # noqa: ANN201
         spec,
         origin="lower",
         aspect="auto",
-        cmap="magma",
+        cmap=cmap,
         extent=(times[0], times[-1], freqs[0] / 1e3, freqs[-1] / 1e3),
         vmin=vmax - dynamic_range,
         vmax=vmax,
@@ -58,7 +112,7 @@ def plot_spectrogram(  # noqa: ANN201
 
 
 def plot_separation(mixture, sources, sample_rate: int = 16000):  # noqa: ANN001, ANN201
-    """Figure with the mixture on top and one row per separated source.
+    """One row: the mixture, then each separated source, as in the dissertation's examples.
 
     Args:
         mixture: Waveform ``(L,)``.
@@ -71,16 +125,19 @@ def plot_separation(mixture, sources, sample_rate: int = 16000):  # noqa: ANN001
     import matplotlib.pyplot as plt
 
     sources = np.atleast_2d(np.asarray(sources))
-    fig, axes = plt.subplots(
-        1 + len(sources), 1, figsize=(6, 1.6 * (1 + len(sources))), sharex=True, sharey=True
-    )
-    # One colour scale for all panels, so that near-silent outputs look silent.
-    top = spectrogram_db(mixture, sample_rate)[0].max()
-    plot_spectrogram(axes[0], mixture, sample_rate, vmax=top)
-    axes[0].set_ylabel("mixture\nkHz")
-    for k, source in enumerate(sources, start=1):
-        plot_spectrogram(axes[k], source, sample_rate, vmax=top)
-        axes[k].set_ylabel(f"source {k}\nkHz")
-    axes[-1].set_xlabel("time (s)")
-    fig.tight_layout()
+    with matplotlib.rc_context(style()):
+        fig, axes = plt.subplots(
+            1, 1 + len(sources), figsize=(1.75 * (1 + len(sources)), 2.1), sharex=True, sharey=True
+        )
+        # One colour scale for all panels, so that near-silent outputs look silent.
+        top = spectrogram_db(mixture, sample_rate)[0].max()
+        plot_spectrogram(axes[0], mixture, sample_rate, vmax=top)
+        axes[0].set_title("mixture")
+        axes[0].set_ylabel("frequency (kHz)")
+        for k, source in enumerate(sources, start=1):
+            plot_spectrogram(axes[k], source, sample_rate, vmax=top)
+            axes[k].set_title(f"source {k}")
+        for ax in axes:
+            ax.set_xlabel("time (s)")
+        fig.tight_layout()
     return fig

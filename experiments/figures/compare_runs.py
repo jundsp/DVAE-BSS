@@ -20,6 +20,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
+from dvae_bss.plotting import style
+
 METRICS = {"sdr": "SI-SDR", "sir": "SIR", "sar": "SAR"}
 BOX = dict(showfliers=False, whis=0)
 BOX_OUTLINE = dict(
@@ -72,7 +74,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--exclude-instrument", nargs="*", default=[], help="drop these instruments"
     )
+    parser.add_argument("--usetex", action="store_true", help="typeset text with LaTeX")
     args = parser.parse_args(argv)
+    plt.rcParams.update(style(args.usetex))
     labels = args.labels or [path.parent.name for path in args.results]
     if len(labels) != len(args.results):
         parser.error("--labels needs one entry per results file")

@@ -24,7 +24,7 @@ import torch
 from dvae_bss import Separator, load_model
 from dvae_bss.data import PremixedDataset
 from dvae_bss.metrics import optimal_permute
-from dvae_bss.plotting import plot_spectrogram, spectrogram_db
+from dvae_bss.plotting import plot_spectrogram, spectrogram_db, style
 
 
 def active_span(wave: np.ndarray, sample_rate: int, threshold: float = 1e-4) -> slice:
@@ -42,14 +42,14 @@ def draw_example(mix: np.ndarray, targets: np.ndarray, estimates: np.ndarray, ra
     fig, axes = plt.subplots(3, n, figsize=(2.75 * n, 5), sharex=True, sharey=True, squeeze=False)
     top = spectrogram_db(mix[span], rate)[0].max()
     plot_spectrogram(axes[0, 0], mix[span], rate, vmax=top)
-    axes[0, 0].set_title("mixture", y=0.97)
+    axes[0, 0].set_title("Mixture", y=0.97)
     for k in range(1, n):
         axes[0, k].remove()
     for k in range(n):
         plot_spectrogram(axes[1, k], targets[k][span], rate, vmax=top)
         plot_spectrogram(axes[2, k], estimates[k][span], rate, vmax=top)
-        axes[1, k].set_title(f"source {k + 1}", y=0.97)
-        axes[2, k].set_title(f"estimate {k + 1}", y=0.97)
+        axes[1, k].set_title(f"Target {k + 1}", y=0.97)
+        axes[2, k].set_title(f"Estimate {k + 1}", y=0.97)
         axes[2, k].set_xlabel("time (s)")
     for row in range(3):
         axes[row, 0].set_ylabel("frequency (kHz)")
@@ -66,7 +66,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--examples", type=int, nargs="+", default=[0], help="indices in the set")
     parser.add_argument("-o", "--out", type=Path, default=Path("figures/qualitative"))
     parser.add_argument("--device", default="cpu")
+    parser.add_argument("--usetex", action="store_true", help="typeset text with LaTeX")
     args = parser.parse_args(argv)
+    plt.rcParams.update(style(args.usetex))
 
     model, stft = load_model(args.model, args.legacy_config)
     separator = Separator(model, stft).to(args.device).eval()

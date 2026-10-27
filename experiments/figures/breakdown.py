@@ -20,7 +20,12 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from dvae_bss.plotting import style
+
 RENAME = {"sdr": "SI-SDR", "sir": "SIR", "sar": "SAR"}
+# Display names of the two-note set's note types, as in the dissertation. Other names keep
+# their spelling, with underscores as spaces (Computer Modern has no underscore glyph).
+LABELS = {"forced": "sustain", "forced_vibrato": "vibrato"}
 
 
 def save(fig, path: Path) -> None:
@@ -33,8 +38,11 @@ def save(fig, path: Path) -> None:
 def by_instrument(data: pd.DataFrame, out: Path) -> None:
     """Box plot of SI-SDR per source instrument, ordered by median."""
     order = data.groupby("instrument")["SI-SDR"].median().sort_values().index
-    fig, ax = plt.subplots(figsize=(2.5, 3))
-    sns.boxplot(data=data, x="instrument", y="SI-SDR", order=order, ax=ax, showfliers=False, whis=0)
+    fig, ax = plt.subplots(figsize=(1.2 + 0.15 * len(order), 3))
+    sns.boxplot(
+        data=data, x="instrument", y="SI-SDR", order=order, hue="instrument", hue_order=order,
+        palette="husl", legend=False, notch=True, ax=ax, showfliers=False, whis=0,
+    )  # fmt: skip
     ax.tick_params(axis="x", rotation=90)
     ax.set_xlabel(None)
     save(fig, out / "boxplot_instrument_sisdr.pdf")
@@ -87,14 +95,22 @@ def time_semitone_maps(data: pd.DataFrame, out: Path) -> None:
     for measure in mean.columns:
         grid = mean[measure].unstack()
         fig, ax = plt.subplots(figsize=(3.5, 2.5))
+        times, semitones = grid.columns.to_numpy(float), grid.index.to_numpy()
+        half_step = np.diff(times).min() / 2 if len(times) > 1 else 0.5
         image = ax.imshow(
             grid.to_numpy(),
             origin="lower",
             aspect="auto",
             cmap="plasma",
             interpolation="none",
-            extent=(grid.columns.min(), grid.columns.max(), grid.index.min(), grid.index.max() + 1),
+            extent=(
+                times[0] - half_step,
+                times[-1] + half_step,
+                semitones[0] - 0.5,
+                semitones[-1] + 0.5,
+            ),
         )
+        ax.set_yticks(semitones)
         fig.colorbar(image).ax.set_ylabel(measure)
         ax.set(xlabel=r"$\Delta$ time (s)", ylabel=r"$\Delta$ semitone")
         save(fig, out / f"time_semitone_{measure}.pdf")
@@ -105,8 +121,14 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("results", type=Path, help="results.json of dvae-evaluate")
     parser.add_argument("-o", "--out", type=Path, default=Path("figures/breakdown"))
+    parser.add_argument("--usetex", action="store_true", help="typeset text with LaTeX")
     args = parser.parse_args(argv)
+    plt.rcParams.update(style(args.usetex))
     data = pd.read_json(args.results, orient="index").rename(columns=RENAME)
+    for column in ("instrument", "instrument1", "instrument2"):
+        if column in data:
+            data[column] = [LABELS.get(str(n), str(n).replace("_", " ")) for n in data[column]]
+    two_note = "delta_semitone" in data
     args.out.mkdir(parents=True, exist_ok=True)
 
     if "instrument" in data:
@@ -118,7 +140,9 @@ def main(argv: list[str] | None = None) -> None:
         )
         by_pair(data, args.out)
     if "delta_time" in data:
-        line(data, "delta_time", r"$|\Delta|$ time (s)", args.out / "time_sdr.pdf")
+        label = r"$\Delta$ time (s)" if two_note else r"$|\Delta|$ time (s)"
+        hue = "instrument1" if two_note and "instrument1" in data else None
+        line(data, "delta_time", label, args.out / "time_sdr.pdf", hue=hue)
     if "delta_pitch" in data:
         data["abs_delta_pitch"] = data["delta_pitch"].abs()
         line(data, "abs_delta_pitch", r"$|\Delta|$ pitch (semitones)", args.out / "pitch_sdr.pdf")

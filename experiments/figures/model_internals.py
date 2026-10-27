@@ -22,6 +22,7 @@ import torch
 
 from dvae_bss import load_model
 from dvae_bss.data import read_audio
+from dvae_bss.plotting import style
 
 GREYS = dict(aspect="auto", origin="lower", interpolation="none", cmap="Greys")
 
@@ -76,7 +77,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("-o", "--out", type=Path, default=Path("figures/internals"))
     parser.add_argument("--samples", type=int, default=3, help="prior samples to draw")
     parser.add_argument("--seed", type=int, default=2)
+    parser.add_argument("--usetex", action="store_true", help="typeset text with LaTeX")
     args = parser.parse_args(argv)
+    plt.rcParams.update(style(args.usetex))
     torch.manual_seed(args.seed)
     args.out.mkdir(parents=True, exist_ok=True)
 
