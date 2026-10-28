@@ -15,6 +15,12 @@ needed during training. The model is trained by reconstructing mixtures as a sum
 decoded sources, each with its own latent trajectory under a learned dynamical prior. Because
 the prior is recurrent, the model separates signals of any duration.
 
+![Concept of the DVAE: an encoder maps the mixture spectrogram to latent source trajectories, a feature decoder maps each trajectory to a source spectrogram, and the sources add up to an estimate of the mixture.](docs/concept.png)
+
+*A dynamical inference model (encoder) separates the mixture into latent source trajectories.
+A dynamical generative model (decoder) then generates a signal from each latent source, and the
+source signals add up to an estimate of the mixture.*
+
 ![A two-note mixture (left) and the five outputs of a DVAE trained on RWC (right): the two notes land in two outputs, the other three stay nearly silent.](docs/example.png)
 
 *A two-note mixture (left) and the `K = 5` outputs of a model trained on RWC (right). Each

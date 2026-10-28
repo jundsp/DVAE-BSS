@@ -6,7 +6,8 @@ with the mixture, the true sources and the matched estimates of each example, pl
 built with
 
     python experiments/figures/make_demo_page.py -d data/TwoNote --examples 365 619 357 222 \\
-        --notes "" "" "" "Typical failure: notes at the same pitch are not separated." -o docs
+        --notes "" "" "" "Typical failure: notes at the same pitch are not separated." \\
+        --diagram concept.png -o docs
 """
 
 from __future__ import annotations
