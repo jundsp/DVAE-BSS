@@ -18,7 +18,7 @@ the prior is recurrent, the model separates signals of any duration.
 ![A two-note mixture (left) and the five outputs of a DVAE trained on RWC (right): the two notes land in two outputs, the other three stay nearly silent.](docs/example.png)
 
 *A two-note mixture (left) and the `K = 5` outputs of a model trained on RWC (right). Each
-note ends up in its own output; the remaining outputs stay nearly empty.*
+note ends up in its own output; the remaining outputs stay nearly silent.*
 
 The model and all results here are from Chapter 6 of the dissertation, "Variational
 auto-encoding unsupervised blind source separation". It follows
@@ -182,18 +182,12 @@ pitch/time breakdowns, feature maps), and a table of which script produces which
 
 ## Differences from the dissertation code
 
-The package was refactored from the research scripts at `dissertation-2024`. The model is the
-same, and parameter names are unchanged so old checkpoints load. `tests/test_equivalence.py`
-checks the new code against outputs recorded from the original: forward passes, loss terms, a
-20-step training run, separation output, the STFT and the metrics.
+The model is the same, and parameter names are unchanged so old checkpoints load.
+`tests/test_equivalence.py` checks the new code against outputs recorded from the original:
+forward passes, loss terms, a 20-step training run, separation output, the STFT and the metrics.
 
 Deliberate changes:
 
-- **Bug fixes.** A dilated separator with more than one layer crashed (its last layer was added
-  twice). The decoders required the last two layer widths to be equal. SI-SDR divided by zero on
-  silent targets. `--lr` was ignored. The ideal-mask baseline rescaled the sources by the
-  mixture gain and stored the Mix, IRM and IBM results in one shared dictionary, so its numbers
-  can differ slightly from the dissertation's IBM/IRM columns.
 - **Evaluation** runs on the whole test set; the original scripts stopped after a fixed number
   of batches. Use `--max-batches` for a quick check.
 - **Training** runs on a single CPU or GPU without Slurm, uses `torchrun` for several GPUs, and
