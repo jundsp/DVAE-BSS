@@ -14,8 +14,8 @@ from typing import Any
 
 import torch
 
-from .audio import CompressedSTFT
-from .model import DVAE
+from dvae_bss.audio import CompressedSTFT
+from dvae_bss.model import DVAE
 
 FORMAT_VERSION = 1
 

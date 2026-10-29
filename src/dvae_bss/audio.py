@@ -68,6 +68,8 @@ class CompressedSTFT(nn.Module):
 
     def padding(self, n_samples: int) -> tuple[int, int, int]:
         """Zero padding ``(left, right)`` and the resulting number of frames."""
+        # Pad so that the frame count is k * FRAME_MULTIPLE + 1: each strided layer maps
+        # 2m + 1 frames to m + 1, and the decoder can then restore the exact length.
         n_frames = math.ceil(
             (self.n_fft + n_samples - 2 * self.hop_length - 1) / self.hop_length + 1
         )
@@ -109,12 +111,14 @@ class CompressedSTFT(nn.Module):
             Waveforms of shape ``(B, n_samples)``.
         """
         left, right, n_frames = self.padding(n_samples)
+        # Undo the compression, |X|^c -> |X|, then inverse FFT, window and overlap-add.
         spec = torch.polar(spec.abs().pow(1.0 / self.compression), spec.angle())
         window = self.window.to(spec.device)
         frames = (
             torch.fft.irfft(spec, n=self.n_fft, dim=-2) * window.view(1, -1, 1) * self.normalizer
         )
         length = (n_frames - 1) * self.hop_length + self.n_fft
+        # fold() is the overlap-add: it sums the windowed frames at their hop positions.
         wave = F.fold(
             frames,
             output_size=(1, length),

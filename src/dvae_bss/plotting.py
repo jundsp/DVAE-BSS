@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from .audio import CompressedSTFT, mag2db
+from dvae_bss.audio import CompressedSTFT, mag2db
 
 SPECTROGRAM_CMAP = "jet"
 

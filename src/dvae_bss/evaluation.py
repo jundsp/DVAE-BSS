@@ -15,7 +15,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from .metrics import bss_metrics
+from dvae_bss.metrics import bss_metrics
 
 METRICS = ("sdr", "sir", "sar")
 

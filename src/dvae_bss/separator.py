@@ -5,8 +5,8 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from .audio import CompressedSTFT
-from .model import DVAE
+from dvae_bss.audio import CompressedSTFT
+from dvae_bss.model import DVAE
 
 
 class Separator(nn.Module):
@@ -40,12 +40,16 @@ class Separator(nn.Module):
             Source waveforms, shape ``(B, K, L)``; sources are in arbitrary order.
         """
         n_samples = wave.shape[-1]
-        mixture = self.stft.analysis(wave)
+        mixture = self.stft.analysis(wave)  # compressed complex STFT (B, F, T)
         magnitude = mixture.abs()
+        # Posterior means, no sampling: a deterministic estimate of every source.
         output = self.model(magnitude, stochastic=False)
-        sources = output["recon_s"]
+        sources = output["recon_s"]  # (B, K, F, T)
         if self.mask:
+            # Ratio mask: source k gets the fraction S_k / sum_j S_j of the mixture in every
+            # time-frequency bin, so the estimates add up exactly to the mixture.
             sources = sources * (magnitude / output["recon_x"]).unsqueeze(1)
+        # The model estimates magnitudes only; every source reuses the mixture's phase.
         spectra = torch.polar(sources, mixture.angle().unsqueeze(1).expand_as(sources))
         batch, k, n_freq, n_frames = spectra.shape
         out = self.stft.synthesis(spectra.reshape(-1, n_freq, n_frames), n_samples)

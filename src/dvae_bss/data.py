@@ -21,7 +21,7 @@ import torch
 from scipy.signal import resample_poly
 from torch.utils.data import Dataset
 
-from .audio import db2mag
+from dvae_bss.audio import db2mag
 
 AUDIO_SUFFIXES = (".wav", ".flac", ".ogg")
 
@@ -137,6 +137,8 @@ class NoteSequenceDataset(Dataset):
     def __getitem__(self, index: int) -> torch.Tensor:
         rng = np.random.default_rng(None if self.seed is None else [self.seed, index])
         stream = torch.zeros(self.n_samples)
+        # Write sounds one after another into a silent buffer, each after a random gap, until
+        # the buffer is full. A stream holds sounds of one source in sequence, never overlapping.
         position = int(rng.integers(self.max_silence))
         file_index = index
         for _ in range(self.max_sounds):
@@ -180,8 +182,12 @@ def mix_batch(
     batch = streams.shape[0]
     if batch < num_sources:
         raise ValueError(f"need a batch of at least {num_sources} streams, got {batch}")
+    # Rolling the batch pairs every stream with different neighbours, so a batch of B streams
+    # gives B mixtures without loading any extra audio.
     sources = torch.stack([streams.roll(k, dims=0) for k in range(num_sources)], dim=1)
     if random_count and num_sources > 1:
+        # Some mixtures then hold fewer sources, so the model also learns to leave outputs
+        # silent.
         keep = torch.randint(0, 2, (batch, num_sources - 1, 1), generator=generator)
         sources = torch.cat([sources[:, :1], sources[:, 1:] * keep], dim=1)
     if average:
