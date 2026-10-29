@@ -28,7 +28,7 @@ from torch.utils.data import DataLoader
 from dvae_bss import DVAE, CompressedSTFT, load_checkpoint, save_checkpoint
 from dvae_bss.cli import train as dvae_train
 from dvae_bss.cli.common import resolve_device
-from dvae_bss.data import PremixedDataset, mix_batch
+from dvae_bss.data import NoteSequenceDataset, PremixedDataset, mix_batch
 from dvae_bss.evaluation import evaluate_methods, print_summary
 from dvae_bss.metrics import bss_metrics
 
@@ -61,13 +61,18 @@ def train(args: argparse.Namespace) -> None:
         raise SystemExit("--num-sources must be even")
     device = resolve_device(args.device)
     torch.manual_seed(args.seed)
-    stft = CompressedSTFT(args.n_fft, args.hop_length, args.compression, args.sample_rate)
-    args.autoencoder = True
-    model = dvae_train.build_model(args, stft).to(device)
+    stft = CompressedSTFT(compression=args.compression, sample_rate=dvae_train.SAMPLE_RATE)
+    model = dvae_train.build_model(args, stft, autoencoder=True).to(device)
     train_files, val_files = dvae_train.split_files(args)
     loaders = {
         name: DataLoader(
-            dvae_train.make_dataset(files, args, seed=None if name == "train" else args.seed),
+            NoteSequenceDataset(
+                files,
+                duration=args.duration,
+                sample_rate=stft.sample_rate,
+                augment_levels=True,
+                seed=None if name == "train" else args.seed,
+            ),
             batch_size=min(args.batch_size, len(files)),
             drop_last=True,
             num_workers=args.num_workers,
@@ -75,7 +80,7 @@ def train(args: argparse.Namespace) -> None:
         for name, files in (("train", train_files), ("val", val_files))
         if len(files) >= max(args.num_targets, 2)  # a mixture needs at least this many sounds
     }
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=2e-5)
     args.out.mkdir(parents=True, exist_ok=True)
     with open(args.out / "log.csv", "w", newline="") as log:
         writer = csv.writer(log)

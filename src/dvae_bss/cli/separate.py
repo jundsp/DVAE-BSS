@@ -1,4 +1,4 @@
-"""``dvae-separate``: split audio files into sources with a trained model."""
+"""Separate audio files into sources with a trained model, one wav per source."""
 
 from __future__ import annotations
 
@@ -8,10 +8,10 @@ from pathlib import Path
 import soundfile as sf
 import torch
 
-from ..checkpoint import load_model
-from ..data import read_audio
-from ..separator import Separator
-from .common import resolve_device
+from dvae_bss.checkpoint import load_model
+from dvae_bss.cli.common import resolve_device
+from dvae_bss.data import read_audio
+from dvae_bss.separator import Separator
 
 # Default model location relative to a source checkout of the repository.
 PRETRAINED = Path(__file__).resolve().parents[3] / "pretrained" / "dvae_rwc_k5.pt"
@@ -19,37 +19,16 @@ PRETRAINED = Path(__file__).resolve().parents[3] / "pretrained" / "dvae_rwc_k5.p
 
 def build_parser() -> argparse.ArgumentParser:
     """Command-line options of ``dvae-separate``."""
-    parser = argparse.ArgumentParser(
-        prog="dvae-separate",
-        description="Separate mixtures into sources. Writes one wav file per source.",
-    )
-    parser.add_argument("audio", nargs="+", type=Path, help="mixture files (wav, flac, ogg)")
-    parser.add_argument(
-        "-m",
-        "--model",
-        type=Path,
-        default=PRETRAINED if PRETRAINED.exists() else None,
-        help="trained model; the pretrained one if the repository includes it",
-    )
-    parser.add_argument(
-        "--legacy-config",
-        type=Path,
-        help="configuration.txt of a checkpoint from the dissertation code "
-        "(default: the file next to the checkpoint)",
-    )
-    parser.add_argument(
-        "-o", "--out-dir", type=Path, default=Path("separated"), help="output folder"
-    )
-    parser.add_argument("--device", default="auto", help="'auto', 'cpu', 'cuda', ...")
-    parser.add_argument(
-        "--no-normalize",
-        action="store_true",
-        help="do not scale the mixture to unit peak before separation",
-    )
-    parser.add_argument(
-        "--plot", action="store_true", help="also save a spectrogram figure (needs matplotlib)"
-    )
-    return parser
+    p = argparse.ArgumentParser(prog="dvae-separate", description=__doc__.split("\n")[0])
+    p.add_argument("audio", nargs="+", type=Path, help="mixture files (wav, flac, ogg)")
+    default_model = PRETRAINED if PRETRAINED.exists() else None
+    p.add_argument("-m", "--model", type=Path, default=default_model, help="default: pretrained/")
+    p.add_argument("--legacy-config", type=Path, help="configuration.txt of an old checkpoint")
+    p.add_argument("-o", "--out-dir", type=Path, default=Path("separated"))
+    p.add_argument("--device", default="auto")
+    p.add_argument("--no-normalize", action="store_true", help="do not scale input to unit peak")
+    p.add_argument("--plot", action="store_true", help="also save a spectrogram figure")
+    return p
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -73,7 +52,7 @@ def main(argv: list[str] | None = None) -> None:
             sf.write(target, source.clamp(-1, 1).numpy(), stft.sample_rate, subtype="PCM_24")
             print(target)
         if args.plot:
-            from ..plotting import plot_separation
+            from dvae_bss.plotting import plot_separation
 
             figure = plot_separation(mixture.numpy(), sources.numpy(), stft.sample_rate)
             figure.savefig(args.out_dir / f"{path.stem}.png", dpi=150)
