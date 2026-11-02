@@ -67,7 +67,7 @@ Datasets are not included: [RWC Instruments](https://doi.org/10.5281/zenodo.1717
   year   = {2024},
   type   = {Ph.D. dissertation},
   note   = {Chapter 6: Variational auto-encoding unsupervised blind source separation},
-  url    = {https://escholarship.mcgill.ca/downloads/2v23w0350}
+  url    = {https://hdl.handle.net/20.500.14905/94099}
 }
 ```
 
