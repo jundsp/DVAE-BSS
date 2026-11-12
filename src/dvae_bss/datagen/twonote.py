@@ -12,12 +12,12 @@ Every mixture adds a reference note (C4, starting at ``LEAD_IN``) and a second n
 ``delta_semitone`` semitones higher (0 to 12) and starts ``delta_time`` seconds later
 (0.005 to 1.005 s), for six pairs of production types. The full grid is
 6 × 13 × 17 = 1326 mixtures, numbered with the onset offset varying fastest, then the
-interval, then the pair, so items keep the numbers they had in the dissertation
-(the examples on the demo page are items 222, 357, 365 and 619).
+interval, then the pair, so items keep the numbers they had in the dissertation.
 
 The original generator was lost. This one was rebuilt from the appendix and fitted to the
-four TwoNote items kept in ``docs/audio``: their spectrograms match within about 1 dB, and
-the free and sustained notes match sample for sample (over 20 dB SI-SDR). The vibrato note
+four original TwoNote items 222, 357, 365 and 619, kept in ``tests/fixtures/twonote``: their
+spectrograms match within about 1 dB, and the free and sustained notes match sample for
+sample (over 20 dB SI-SDR). The vibrato note
 matches in spectrum but not in phase. Two details differ from the appendix: the vibrato rate
 is 4 Hz, not 5 Hz, and each note is scaled to the same RMS, not the same peak.
 

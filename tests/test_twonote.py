@@ -7,7 +7,7 @@ import soundfile as sf
 from dvae_bss.data import PremixedDataset
 from dvae_bss.datagen import twonote
 
-AUDIO = Path(__file__).resolve().parents[1] / "docs" / "audio"
+AUDIO = Path(__file__).resolve().parent / "fixtures" / "twonote"
 
 # Items of the original TwoNote set kept for the demo page, with their metadata.
 DEMO = {
@@ -42,7 +42,7 @@ def test_note_is_finite_and_pitched(kind):
         twonote.synth_note("kazoo", 440.0)
 
 
-@pytest.mark.skipif(not AUDIO.exists(), reason="demo audio missing")
+@pytest.mark.skipif(not AUDIO.exists(), reason="original TwoNote items missing")
 @pytest.mark.parametrize("index", list(DEMO))
 def test_matches_original_items(index):
     record = twonote.grid()[index]

@@ -14,11 +14,13 @@ No isolated sources or labels are used in training.
 
 ![Concept of the DVAE: an encoder maps the mixture spectrogram to latent source trajectories, a decoder maps each trajectory to a source spectrogram, and the sources add up to an estimate of the mixture.](docs/concept.png)
 
-![A two-note mixture (left) and the five outputs of a DVAE trained on RWC (right).](docs/example.png)
+![A mixture of a reed note and a guitar note (left) and the five outputs of a DVAE trained on RWC (right).](docs/example.png)
 
-*A two-note mixture (`examples/mixture.wav`) and the five outputs of the pretrained model, made
-with `dvae-separate examples/mixture.wav --plot`. Each note lands in its own output and the
-other three stay silent.*
+*A mixture of two real recordings, a reed note and a guitar note from the NSynth test set
+(`examples/mixture.wav`), and the five outputs of the pretrained model, made with
+`dvae-separate examples/mixture.wav --plot`. Each note lands in its own output and the other
+three stay silent. The mixture is out of sample: the model was trained and validated on RWC
+only and never heard NSynth.*
 
 ## Usage
 
@@ -57,6 +59,14 @@ and IRM are oracle masks.
 
 Datasets are not included: [RWC Instruments](https://doi.org/10.5281/zenodo.17170844),
 [NSynth](https://magenta.tensorflow.org/datasets/nsynth).
+
+The example mixture and the [demo page](https://jundsp.github.io/DVAE-BSS/) use notes from the
+NSynth test set (Engel et al., 2017, Google Magenta), licensed
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). They are out of sample: the
+pretrained model was trained and validated on RWC only. The notes are `reed_acoustic_011-065-075`,
+`guitar_acoustic_014-058-050`, `brass_acoustic_046-059-075`, `guitar_acoustic_021-067-127`,
+`string_acoustic_056-064-100`, `keyboard_acoustic_004-059-127`, `flute_acoustic_002-072-127`
+and `mallet_acoustic_062-063-100`, mixed by `experiments/data_prep/make_nsynth_examples.py`.
 
 ## Generated data
 
