@@ -23,6 +23,8 @@ dependencies = [
 dvae-train = "dvae_bss.cli.train:main"
 dvae-separate = "dvae_bss.cli.separate:main"
 dvae-evaluate = "dvae_bss.cli.evaluate:main"
+dvae-make-synthetic = "dvae_bss.datagen.synthetic:main"
+dvae-make-twonote = "dvae_bss.datagen.twonote:main"
 
 [project.optional-dependencies]
 plots = ["matplotlib"]

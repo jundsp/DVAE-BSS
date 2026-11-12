@@ -4,7 +4,7 @@ Each example adds two randomly chosen sounds, the second delayed by a random tim
 the mixture, the two sources as a two-channel file, and metadata for the evaluation figures:
 the ``instrument`` of each sound (name of its parent folder), ``delta_time`` and, if the file
 names start with a MIDI pitch (like ``060_...``), the pitches. The result can be used with
-``dvae-evaluate``.
+``dvae-evaluate``. The work is done by ``dvae_bss.data.write_premixed_set``.
 
     python experiments/data_prep/make_test_set.py --audio data/test_notes --out data/test_set -n 500
 """
@@ -12,15 +12,9 @@ names start with a MIDI pitch (like ``060_...``), the pitches. The result can be
 from __future__ import annotations
 
 import argparse
-import json
-import re
 from pathlib import Path
 
-import numpy as np
-import soundfile as sf
-import torch
-
-from dvae_bss.data import collect_files, read_audio
+from dvae_bss.data import collect_files, write_premixed_set
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -40,40 +34,8 @@ def main(argv: list[str] | None = None) -> None:
     files = collect_files(args.audio)
     if len(files) < 2:
         raise SystemExit("need at least two sounds")
-    rng = np.random.default_rng(args.seed)
-    n_samples = int(args.duration * args.sample_rate)
-    (args.out / "audio").mkdir(parents=True, exist_ok=True)
-
-    records = {}
-    for i in range(args.num_examples):
-        first, second = rng.choice(len(files), size=2, replace=False)
-        delay = round(float(rng.uniform(0, args.max_delay)), 4)
-        stems = torch.zeros(2, n_samples)
-        for k, (index, onset) in enumerate(((first, 0), (second, int(delay * args.sample_rate)))):
-            wave = read_audio(files[index], args.sample_rate)
-            wave = wave / wave.abs().max().clamp_min(1e-8)
-            wave = wave[: n_samples - onset]
-            stems[k, onset : onset + len(wave)] = wave
-        sf.write(
-            args.out / "audio" / f"mix_{i}.wav",
-            stems.sum(0).numpy(),
-            args.sample_rate,
-            subtype="FLOAT",
-        )
-        sf.write(
-            args.out / "audio" / f"stems_{i}.wav",
-            stems.T.numpy(),
-            args.sample_rate,
-            subtype="FLOAT",
-        )
-        record = dict(filename=f"mix_{i}.wav", stemname=f"stems_{i}.wav", delta_time=delay)
-        for k, index in enumerate((first, second), start=1):
-            record[f"instrument{k}"] = files[index].parent.name
-            match = re.match(r"(\d{1,3})_", files[index].name)
-            if match:
-                record[f"pitch{k}"] = int(match.group(1))
-        records[str(i)] = record
-    (args.out / "mix.json").write_text(json.dumps(records, indent=2))
+    write_premixed_set(files, args.out, args.num_examples, args.duration, args.max_delay,
+                       args.sample_rate, args.seed)  # fmt: skip
     print(f"wrote {args.num_examples} examples to {args.out}")
 
 

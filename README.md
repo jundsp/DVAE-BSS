@@ -56,6 +56,22 @@ and IRM are oracle masks.
 Datasets are not included: [RWC Instruments](https://doi.org/10.5281/zenodo.17170844),
 [NSynth](https://magenta.tensorflow.org/datasets/nsynth).
 
+## Generated data
+
+Two generators write audio to `data/` (not tracked by git), so nothing needs downloading:
+
+```bash
+dvae-make-twonote --out data/TwoNote        # the dissertation's TwoNote test set, 1326 mixtures
+dvae-make-synthetic --out data/synthetic    # new: notes for training and a two-note test set
+dvae-train --train-data data/synthetic/train --val-data data/synthetic/val --out runs/syn
+```
+
+`dvae-make-twonote` rebuilds the TwoNote set described in the dissertation's appendix.
+`dvae-make-synthetic` is not from the dissertation. It makes 3000 training, 300 validation and
+300 test notes from six instrument families (plucked and bowed strings, reed, brass, bell,
+organ), with pitch, timbre, vibrato and decay drawn at random, plus 500 two-note test
+mixtures. The same seed gives the same files.
+
 ## Citation
 
 ```bibtex

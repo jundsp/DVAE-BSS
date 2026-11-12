@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -231,3 +232,51 @@ class PremixedDataset(Dataset):
             )
             stems = torch.from_numpy(resampled.astype(np.float32))
         return {"mix": mix, "stems": stems, **record}
+
+
+def write_premixed_set(
+    files: Sequence[str | Path],
+    out: str | Path,
+    num_examples: int = 100,
+    duration: float = 4.0,
+    max_delay: float = 1.0,
+    sample_rate: int = 16000,
+    seed: int = 0,
+) -> Path:
+    """Write a :class:`PremixedDataset` of two-sound mixtures made from isolated sounds.
+
+    Each example adds two different random sounds, each scaled to unit peak, the second
+    delayed by up to ``max_delay`` seconds. Records hold ``delta_time``, the ``instrument`` of
+    each sound (its parent folder's name) and, when the file name starts with a MIDI pitch
+    (``060_...``), the ``pitch``.
+    """
+    files = [Path(f) for f in files]
+    if len(files) < 2:
+        raise ValueError("need at least two sounds")
+    out = Path(out)
+    rng = np.random.default_rng(seed)
+    n_samples = int(duration * sample_rate)
+    (out / "audio").mkdir(parents=True, exist_ok=True)
+
+    records = {}
+    for i in range(num_examples):
+        first, second = rng.choice(len(files), size=2, replace=False)
+        delay = round(float(rng.uniform(0, max_delay)), 4)
+        stems = torch.zeros(2, n_samples)
+        for k, (index, onset) in enumerate(((first, 0), (second, int(delay * sample_rate)))):
+            wave = read_audio(files[index], sample_rate)
+            wave = wave / wave.abs().max().clamp_min(1e-8)
+            wave = wave[: n_samples - onset]
+            stems[k, onset : onset + len(wave)] = wave
+        audio = out / "audio"
+        sf.write(audio / f"mix_{i}.wav", stems.sum(0).numpy(), sample_rate, subtype="FLOAT")
+        sf.write(audio / f"stems_{i}.wav", stems.T.numpy(), sample_rate, subtype="FLOAT")
+        record = dict(filename=f"mix_{i}.wav", stemname=f"stems_{i}.wav", delta_time=delay)
+        for k, index in enumerate((first, second), start=1):
+            record[f"instrument{k}"] = files[index].parent.name
+            match = re.match(r"(\d{1,3})_", files[index].name)
+            if match:
+                record[f"pitch{k}"] = int(match.group(1))
+        records[str(i)] = record
+    (out / "mix.json").write_text(json.dumps(records, indent=2))
+    return out

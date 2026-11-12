@@ -14,6 +14,8 @@ write the same `results.json`, so any figure script can read any of them.
 | `baselines/ica_nmf.py`, `baselines/mixit.py` | classical and MixIT baselines |
 | `figures/make_demo_page.py` | the examples page in `docs/` |
 | `data_prep/` | dataset preparation and the test-set builder |
+| `dvae-make-twonote` (`src/dvae_bss/datagen/twonote.py`) | the TwoNote test set (rebuilt) |
+| `dvae-make-synthetic` (`src/dvae_bss/datagen/synthetic.py`) | synthetic notes and test mixtures, no licence needed |
 
 Differences from the original scripts:
 

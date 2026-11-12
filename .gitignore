@@ -9,6 +9,7 @@ venv/
 data/
 output/
 runs/
+results/
 separated/
 saves/
 *.pt
