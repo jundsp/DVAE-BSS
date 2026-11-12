@@ -16,8 +16,9 @@ No isolated sources or labels are used in training.
 
 ![A two-note mixture (left) and the five outputs of a DVAE trained on RWC (right).](docs/example.png)
 
-*A two-note mixture and the five outputs of the pretrained model. Each note lands in its own
-output and the other three stay nearly silent.*
+*A two-note mixture (`examples/mixture.wav`) and the five outputs of the pretrained model, made
+with `dvae-separate examples/mixture.wav --plot`. Each note lands in its own output and the
+other three stay silent.*
 
 ## Usage
 
