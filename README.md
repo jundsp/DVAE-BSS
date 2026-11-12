@@ -31,8 +31,9 @@ dvae-evaluate -m runs/k5/model.pt -d data/test_set -o results/dvae
 
 Training only needs a folder of isolated sounds (e.g. single instrument notes at 16 kHz).
 Mixtures are made on the fly from them. The defaults are the best settings from the
-dissertation. `pretrained/dvae_rwc_k5.pt` is the dissertation's model, trained on RWC notes,
-so expect it to work best on similar material. The model itself is in
+dissertation. `pretrained/dvae_rwc_k5.pt` is a `K = 5` model from the dissertation's
+experiments, trained on RWC notes, so expect it to work best on similar material (see
+[`pretrained/README.md`](pretrained/README.md) for how it was chosen and its scores). The model itself is in
 [`model.py`](src/dvae_bss/model.py), and [`experiments/`](experiments/README.md) has the
 baselines and the scripts for the chapter's figures.
 
