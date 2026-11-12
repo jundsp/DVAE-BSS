@@ -14,7 +14,6 @@ separated/
 saves/
 *.pt
 *.pth
-slurm-*.out
 !tests/fixtures/*.pt
 !pretrained/*.pt
 *.egg-info/
