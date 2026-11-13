@@ -64,9 +64,10 @@ The example mixture and the [demo page](https://jundsp.github.io/DVAE-BSS/) use 
 NSynth test set (Engel et al., 2017, Google Magenta), licensed
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). They are out of sample: the
 pretrained model was trained and validated on RWC only. The notes are `reed_acoustic_011-065-075`,
-`guitar_acoustic_014-058-050`, `brass_acoustic_046-059-075`, `guitar_acoustic_021-067-127`,
-`string_acoustic_056-064-100`, `keyboard_acoustic_004-059-127`, `flute_acoustic_002-072-127`
-and `mallet_acoustic_062-063-100`, mixed by `experiments/data_prep/make_nsynth_examples.py`.
+`guitar_acoustic_014-058-050`, `brass_acoustic_046-059-075`, `brass_acoustic_046-067-075`,
+`guitar_acoustic_021-067-127`, `string_acoustic_056-064-100`, `keyboard_acoustic_004-059-127`,
+`flute_acoustic_002-072-127` and `mallet_acoustic_062-063-100`, mixed by
+`experiments/data_prep/make_nsynth_examples.py`.
 
 ## Generated data
 

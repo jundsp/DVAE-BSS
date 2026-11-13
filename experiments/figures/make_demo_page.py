@@ -7,10 +7,13 @@ built with
 
     python experiments/data_prep/make_nsynth_examples.py --nsynth NSYNTH_TEST \\
         --out data/NSynthExamples
-    python experiments/figures/make_demo_page.py -d data/NSynthExamples --examples 0 1 2 3 \\
-        --diagram concept.png -o docs
+    python experiments/figures/make_demo_page.py -d data/NSynthExamples --examples 0 1 2 3 4 \\
+        --notes "" "" "" "" "$SAME_INSTRUMENT" --diagram concept.png -o docs
 
-where ``NSYNTH_TEST`` is the unpacked NSynth test split.
+where ``NSYNTH_TEST`` is the unpacked NSynth test split and ``SAME_INSTRUMENT`` is "Same
+instrument: two notes of the trumpet from Example 2, with the same timbre and vibrato. The
+notes stay in separate outputs with little leakage, but sound rougher than in Example 2,
+where this trumpet note is mixed with a guitar."
 """
 
 from __future__ import annotations
@@ -52,7 +55,8 @@ def describe(record: dict[str, Any]) -> str:
     if "delta_semitone" in record:
         parts.append(f"{abs(int(record['delta_semitone']))} semitones apart")
     if "delta_time" in record:
-        parts.append(f"second note starts {float(record['delta_time']):.2f} s later")
+        delay = float(record["delta_time"])
+        parts.append(f"second note starts {delay:.2f} s later" if delay else "both start together")
     notes = [record.get(f"note{k}") for k in (1, 2)]
     if all(notes):
         parts.append(f"NSynth notes {notes[0]} and {notes[1]}")

@@ -1,9 +1,9 @@
 r"""Two-note mixtures of real instrument recordings from NSynth, for the demo page and README.
 
 Each mixture adds two acoustic notes from the NSynth test split, each scaled to unit peak,
-the second delayed by ``delay`` seconds. The pair is then scaled so the mixture peaks at 0.9
-(SI-SDR does not change). Writes a pre-mixed set (``mix.json``, ``audio/``) for
-``dvae-evaluate`` and ``experiments/figures/make_demo_page.py``:
+the second delayed by ``delay`` seconds (0 for notes that start together). The pair is then
+scaled so the mixture peaks at 0.9 (SI-SDR does not change). Writes a pre-mixed set
+(``mix.json``, ``audio/``) for ``dvae-evaluate`` and ``experiments/figures/make_demo_page.py``:
 
     python experiments/data_prep/make_nsynth_examples.py \
         --nsynth ~/data/nsynth-test --out data/NSynthExamples
@@ -31,6 +31,7 @@ PAIRS = [
     ("brass_acoustic_046-059-075", "guitar_acoustic_021-067-127", 0.3),
     ("string_acoustic_056-064-100", "keyboard_acoustic_004-059-127", 0.4),
     ("flute_acoustic_002-072-127", "mallet_acoustic_062-063-100", 0.4),
+    ("brass_acoustic_046-059-075", "brass_acoustic_046-067-075", 0.0),
 ]
 SAMPLE_RATE = 16000
 DURATION = 4.0
