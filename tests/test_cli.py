@@ -24,6 +24,13 @@ def test_train_writes_outputs(run):
     assert json.loads((out / "config.json").read_text())["model"]["latent_dim"] == 4
 
 
+def test_mixtures_have_exactly_num_targets_streams_by_default():
+    # The pretrained model was trained on mixtures of exactly two streams.
+    options = ["--train-data", "notes"]
+    assert train.build_parser().parse_args(options).random_count is False
+    assert train.build_parser().parse_args([*options, "--random-count"]).random_count is True
+
+
 def test_resume_continues_the_log(run, tmp_path):
     out = tmp_path / "resumed"
     for name in ("log.csv", "model.pt", "resume.pt", "config.json"):

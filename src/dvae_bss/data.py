@@ -160,7 +160,7 @@ class NoteSequenceDataset(Dataset):
 def mix_batch(
     streams: torch.Tensor,
     num_sources: int = 2,
-    random_count: bool = True,
+    random_count: bool = False,
     average: bool = False,
     generator: torch.Generator | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -173,7 +173,8 @@ def mix_batch(
         streams: ``(B, L)`` streams.
         num_sources: Streams per mixture.
         random_count: Randomly drop each source after the first, so mixtures contain between
-            one and ``num_sources`` active sources.
+            one and ``num_sources`` active sources. Off by default: every mixture then has
+            exactly ``num_sources`` streams, as for the pretrained model.
         average: Divide by ``num_sources`` instead of summing.
         generator: Random generator for the dropping.
 

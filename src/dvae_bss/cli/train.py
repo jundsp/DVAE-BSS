@@ -3,8 +3,10 @@
     dvae-train --train-data data/notes --out runs/k5
 
 The defaults are the settings of the dissertation's RWC model (``pretrained/``). Each epoch
-strings random sounds into streams, adds ``--num-targets`` streams to form each mixture, and
-fits the model to the mixtures only. For several GPUs, launch the same command with
+strings random sounds into streams, adds exactly ``--num-targets`` streams to form each
+mixture, and fits the model to the mixtures only. With ``--random-count``, each stream after
+the first is dropped half the time, so mixtures have between one and ``--num-targets`` streams.
+For several GPUs, launch the same command with
 ``torchrun --nproc_per_node=N -m dvae_bss.cli.train ...``.
 
 The run folder gets ``config.json``, ``log.csv``, ``model.pt`` and ``resume.pt`` (pass it to
@@ -49,7 +51,12 @@ def build_parser(add_help: bool = True) -> argparse.ArgumentParser:
 
     # What the dissertation's experiments varied.
     p.add_argument("--num-sources", type=int, default=5, help="model outputs K")
-    p.add_argument("--num-targets", type=int, default=2, help="max streams per mixture")
+    p.add_argument("--num-targets", type=int, default=2, help="streams per mixture")
+    p.add_argument(
+        "--random-count",
+        action="store_true",
+        help="drop each stream after the first half the time (1 to num-targets)",
+    )
     p.add_argument("--compression", type=float, default=0.5, help="magnitude exponent c")
     p.add_argument("--variance", type=float, default=0.1, help="likelihood variance")
     p.add_argument("--encoder", choices=["strided", "dilated"], default="strided")
@@ -107,7 +114,9 @@ def setup_distributed(device: torch.device) -> tuple[int, int, torch.device]:
     return dist.get_rank(), world_size, device
 
 
-def run_epoch(model, loader, loss_fn, stft, num_targets, optimizer=None, log_interval=0):
+def run_epoch(
+    model, loader, loss_fn, stft, num_targets, optimizer=None, log_interval=0, random_count=False
+):
     """One pass over ``loader``, training if an optimizer is given. Returns mean loss, ELL, KLD."""
     training = optimizer is not None
     model.train(training)
@@ -118,7 +127,7 @@ def run_epoch(model, loader, loss_fn, stft, num_targets, optimizer=None, log_int
     with torch.set_grad_enabled(training):
         for step, streams in enumerate(loader, start=1):
             # Add streams into mixtures. The sources are discarded: training is unsupervised.
-            mixture, _ = mix_batch(streams, num_targets, generator=generator)
+            mixture, _ = mix_batch(streams, num_targets, random_count, generator=generator)
             x = stft.magnitude(mixture.to(device))  # compressed magnitudes (B, F, T)
             # Negative ELBO = reconstruction of the mixture (ell) + KL to the prior (kld).
             ell, kld = loss_fn(x, model(x))
@@ -198,10 +207,12 @@ def main(argv: list[str] | None = None) -> None:
             sampler.set_epoch(epoch)
         log_interval = args.log_interval if is_main else 0
         train = run_epoch(network, train_loader, loss_fn, stft, args.num_targets, optimizer,
-                          log_interval)  # fmt: skip
+                          log_interval, args.random_count)  # fmt: skip
         val = [float("nan")] * 3
         if val_loader is not None:
-            val = run_epoch(network, val_loader, loss_fn, stft, args.num_targets)
+            val = run_epoch(
+                network, val_loader, loss_fn, stft, args.num_targets, random_count=args.random_count
+            )
         if is_main:
             seconds = time.time() - started
             print(f"epoch {epoch:3d}  train {train[0]:.5f}  val {val[0]:.5f}  ({seconds:.0f}s)",
