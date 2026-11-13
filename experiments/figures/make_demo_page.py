@@ -56,7 +56,13 @@ def describe(record: dict[str, Any]) -> str:
         parts.append(f"{abs(int(record['delta_semitone']))} semitones apart")
     if "delta_time" in record:
         delay = float(record["delta_time"])
-        parts.append(f"second note starts {delay:.2f} s later" if delay else "both start together")
+        start = float(record.get("onset1", 0))
+        if delay:
+            parts.append(f"second note starts {delay:.2f} s later")
+        elif start:
+            parts.append(f"both start together at {start:.2f} s")
+        else:
+            parts.append("both start together")
     notes = [record.get(f"note{k}") for k in (1, 2)]
     if all(notes):
         parts.append(f"NSynth notes {notes[0]} and {notes[1]}")

@@ -1,7 +1,7 @@
 r"""Two-note mixtures of real instrument recordings from NSynth, for the demo page and README.
 
-Each mixture adds two acoustic notes from the NSynth test split, each scaled to unit peak,
-the second delayed by ``delay`` seconds (0 for notes that start together). The pair is then
+Each mixture adds two acoustic notes from the NSynth test split, each scaled to unit peak and
+starting at its own onset (equal onsets for notes that start together). The pair is then
 scaled so the mixture peaks at 0.9 (SI-SDR does not change). Writes a pre-mixed set
 (``mix.json``, ``audio/``) for ``dvae-evaluate`` and ``experiments/figures/make_demo_page.py``:
 
@@ -25,13 +25,13 @@ import torch
 
 from dvae_bss.data import read_audio
 
-# (first note, second note, delay of the second note in seconds); NSynth note names.
+# (first note, second note, onset of the first, onset of the second in seconds); NSynth names.
 PAIRS = [
-    ("reed_acoustic_011-065-075", "guitar_acoustic_014-058-050", 0.5),
-    ("brass_acoustic_046-059-075", "guitar_acoustic_021-067-127", 0.3),
-    ("string_acoustic_056-064-100", "keyboard_acoustic_004-059-127", 0.4),
-    ("flute_acoustic_002-072-127", "mallet_acoustic_062-063-100", 0.4),
-    ("brass_acoustic_046-059-075", "brass_acoustic_046-067-075", 0.0),
+    ("reed_acoustic_011-065-075", "guitar_acoustic_014-058-050", 0.0, 0.5),
+    ("brass_acoustic_046-059-075", "guitar_acoustic_021-067-127", 0.0, 0.3),
+    ("string_acoustic_056-064-100", "keyboard_acoustic_004-059-127", 0.4, 0.4),
+    ("flute_acoustic_002-072-127", "mallet_acoustic_062-063-100", 0.0, 0.4),
+    ("brass_acoustic_046-059-075", "brass_acoustic_046-067-075", 0.0, 0.0),
 ]
 SAMPLE_RATE = 16000
 DURATION = 4.0
@@ -49,9 +49,10 @@ def main(argv: list[str] | None = None) -> None:
     n_samples = int(DURATION * SAMPLE_RATE)
     (args.out / "audio").mkdir(parents=True, exist_ok=True)
     records = {}
-    for i, (first, second, delay) in enumerate(PAIRS):
+    for i, (first, second, start1, start2) in enumerate(PAIRS):
         stems = torch.zeros(2, n_samples)
-        for k, (name, onset) in enumerate(((first, 0), (second, int(delay * SAMPLE_RATE)))):
+        for k, (name, start) in enumerate(((first, start1), (second, start2))):
+            onset = int(start * SAMPLE_RATE)
             wave = read_audio(args.nsynth / "audio" / f"{name}.wav", SAMPLE_RATE)
             wave = wave / wave.abs().max().clamp_min(1e-8)
             wave = wave[: n_samples - onset]
@@ -65,7 +66,8 @@ def main(argv: list[str] | None = None) -> None:
         records[str(i)] = dict(
             filename=f"mix_{i}.wav",
             stemname=f"stems_{i}.wav",
-            delta_time=delay,
+            onset1=start1,
+            delta_time=start2 - start1,
             instrument1=meta[first]["instrument_family_str"],
             instrument2=meta[second]["instrument_family_str"],
             pitch1=pitch1,
