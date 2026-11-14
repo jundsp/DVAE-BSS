@@ -1,6 +1,6 @@
 # Pretrained model
 
-`dvae_rwc_k5.pt` is a `K = 5` model from the [dissertation's](https://mcgill.scholaris.ca/server/api/core/bitstreams/2334758f-542d-45cc-897d-37b6dd949f12/content) experiments (run `230122-13058078`,
+`dvae_rwc_k5.pt` is a `K = 5` model from the dissertation's experiments (run `230122-13058078`,
 the `K = 5` model of the number-of-sources study), converted to the current checkpoint format
 and stored in float16. It was trained on two-stream mixtures of RWC instrument notes at 16 kHz,
 with `c = 0.5` and `σ² = 0.1`.
