@@ -3,7 +3,7 @@
 Dynamical variational auto-encoding for unsupervised blind sound separation.
 **[Listen to examples](https://jundsp.github.io/DVAE-BSS/)**
 
-Code for Chapter 6 of my Ph.D. dissertation, *Bayesian Hierarchical Modeling and Inference of
+Code for [Chapter 6 of my Ph.D. dissertation][dissertation] (PDF), *Bayesian Hierarchical Modeling and Inference of
 Mixed Audio Sources* (McGill University, 2024). It extends
 [VAE-BSS](https://github.com/jundsp/VAE-BSS) (EUSIPCO 2021) with a dynamical prior, so it
 separates signals of any length.
@@ -34,7 +34,7 @@ dvae-evaluate -m runs/k5/model.pt -d data/test_set -o results/dvae
 
 Training only needs a folder of isolated sounds (e.g. single instrument notes at 16 kHz).
 Mixtures are made on the fly from them. The defaults are the best settings from the
-dissertation. `pretrained/dvae_rwc_k5.pt` is a `K = 5` model from the dissertation's
+[dissertation][dissertation]. `pretrained/dvae_rwc_k5.pt` is a `K = 5` model from the dissertation's
 experiments, trained on RWC notes, so expect it to work best on similar material (see
 [`pretrained/README.md`](pretrained/README.md) for how it was chosen and its scores). The model itself is in
 [`model.py`](src/dvae_bss/model.py), and [`experiments/`](experiments/README.md) has the
@@ -45,7 +45,7 @@ reproduces them (`tests/test_equivalence.py` checks this) and still loads the ol
 
 ## Results
 
-From the dissertation, for `K = 5` trained on RWC and tested on two-note mixtures, in dB. IBM
+From the [dissertation][dissertation] (Chapter 6), for `K = 5` trained on RWC and tested on two-note mixtures, in dB. IBM
 and IRM are oracle masks.
 
 | Test set | Metric | Mix | DVAE | IBM | IRM |
@@ -79,13 +79,15 @@ dvae-make-synthetic --out data/synthetic    # new: notes for training and a two-
 dvae-train --train-data data/synthetic/train --val-data data/synthetic/val --out runs/syn
 ```
 
-`dvae-make-twonote` rebuilds the TwoNote set described in the dissertation's appendix.
+`dvae-make-twonote` rebuilds the TwoNote set described in the [dissertation's][dissertation] appendix.
 `dvae-make-synthetic` is not from the dissertation. It makes 3000 training, 300 validation and
 300 test notes from six instrument families (plucked and bowed strings, reed, brass, bell,
 organ), with pitch, timbre, vibrato and decay drawn at random, plus 500 two-note test
 mixtures. The same seed gives the same files.
 
 ## Citation
+
+The dissertation is open access: [PDF][dissertation].
 
 ```bibtex
 @phdthesis{neri2024bayesian,
@@ -105,3 +107,5 @@ A journal version (Neri, Depalle, Badeau) is in preparation.
 ## License
 
 Code GPL-3.0. Pretrained weights CC BY-NC 4.0, following the RWC licence.
+
+[dissertation]: https://mcgill.scholaris.ca/server/api/core/bitstreams/2334758f-542d-45cc-897d-37b6dd949f12/content

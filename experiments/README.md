@@ -1,10 +1,10 @@
 # Experiments
 
-Baselines and figure scripts for Chapter 6. Install with `pip install -e ".[experiments]"` and
+Baselines and figure scripts for Chapter 6 of the [dissertation](https://mcgill.scholaris.ca/server/api/core/bitstreams/2334758f-542d-45cc-897d-37b6dd949f12/content). Install with `pip install -e ".[experiments]"` and
 run from the repository root. Every script has `--help`. `dvae-evaluate` and the baselines all
 write the same `results.json`, so any figure script can read any of them.
 
-| Script | Dissertation |
+| Script | [Dissertation](https://mcgill.scholaris.ca/server/api/core/bitstreams/2334758f-542d-45cc-897d-37b6dd949f12/content) |
 |---|---|
 | `dvae-evaluate`, `baselines/ideal_masks.py` | BSS-eval tables (DVAE, mix, IBM, IRM) |
 | `figures/compare_runs.py` | compression, number of sources and variance studies |
