@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.figure import Figure
 
 from dvae_bss.plotting import style
 
@@ -28,7 +29,7 @@ RENAME = {"sdr": "SI-SDR", "sir": "SIR", "sar": "SAR"}
 LABELS = {"forced": "sustain", "forced_vibrato": "vibrato"}
 
 
-def save(fig, path: Path) -> None:
+def save(fig: Figure, path: Path) -> None:
     """Save a figure tightly and close it."""
     fig.tight_layout()
     fig.savefig(path, bbox_inches="tight")

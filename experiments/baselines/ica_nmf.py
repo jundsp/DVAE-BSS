@@ -13,6 +13,7 @@ its folder to ``PYTHONPATH``.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -94,7 +95,9 @@ class NMFDeconvolution:
 def build_estimators(stft: CompressedSTFT, methods: list[str], seed: int) -> dict[str, Any]:
     """Estimators ``batch -> (B, 2, L)`` for the requested methods."""
 
-    def estimator(factorise):
+    def estimator(
+        factorise: Callable[[np.ndarray], np.ndarray],
+    ) -> Callable[[dict[str, Any]], torch.Tensor]:
         def run(batch: dict[str, Any]) -> torch.Tensor:
             mix = batch["mix"]
             spectra = stft.analysis(mix)

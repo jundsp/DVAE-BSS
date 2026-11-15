@@ -28,7 +28,8 @@ only and never heard NSynth.*
 pip install -e .                          # or ".[experiments]" for the baseline/figure scripts
 
 dvae-separate examples/mixture.wav --plot # pretrained model, writes to separated/
-dvae-train --train-data data/notes --out runs/k5
+dvae-train configs/rwc_k5.yaml           # options in a YAML file, writes to runs/k5/
+dvae-train --resume runs/k5               # continue a run
 dvae-evaluate -m runs/k5/model.pt -d data/test_set -o results/dvae
 ```
 
@@ -39,6 +40,22 @@ experiments, trained on RWC notes, so expect it to work best on similar material
 [`pretrained/README.md`](pretrained/README.md) for how it was chosen and its scores). The model itself is in
 [`model.py`](src/dvae_bss/model.py), and [`experiments/`](experiments/README.md) has the
 baselines and the scripts for the chapter's figures.
+
+While training runs, the run folder holds `train.log`, `log.csv` (losses, learning rate,
+the SI-SDR of the separated validation mixtures and peak GPU memory per epoch; the gap between
+`gpu_reserved_gb` and `gpu_total_gb` is the headroom for a larger `batch_size`), `plots/curves.png`, example
+spectrograms in `plots/examples/` and their audio in `samples/`. Install `".[monitor]"` for
+the plots and set `tensorboard: true` to follow the same in TensorBoard. `best.pt` keeps the
+best epoch; `patience` stops early and `lr_patience` lowers the learning rate when progress
+stalls (both off by default, as in the dissertation).
+
+Options come from a YAML file: [`configs/rwc_k5.yaml`](configs/rwc_k5.yaml) lists them all
+with the dissertation's values, and a config only needs the ones that differ. Any option can
+be overridden on the command line, e.g. `dvae-train configs/rwc_k5.yaml out=runs/k5b lr=3e-4`.
+The options a run used are saved in its folder as `config.yaml`, so `--resume runs/k5` needs
+nothing else; overrides given with it (say `epochs=800`) are saved there too. The model
+options are fixed by the checkpoint and cannot change on resume.
+`dvae-train --print-config` prints every option as a new config file.
 
 The tag `dissertation-2024` has the original research scripts. `main` is a cleanup that
 reproduces them (`tests/test_equivalence.py` checks this) and still loads the old checkpoints.
@@ -76,7 +93,7 @@ Two generators write audio to `data/` (not tracked by git), so nothing needs dow
 ```bash
 dvae-make-twonote --out data/TwoNote        # the dissertation's TwoNote test set, 1326 mixtures
 dvae-make-synthetic --out data/synthetic    # new: notes for training and a two-note test set
-dvae-train --train-data data/synthetic/train --val-data data/synthetic/val --out runs/syn
+dvae-train configs/synthetic.yaml          # trains on them, writes to runs/syn/
 ```
 
 `dvae-make-twonote` rebuilds the TwoNote set described in the dissertation's appendix.

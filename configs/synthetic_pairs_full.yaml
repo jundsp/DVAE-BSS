@@ -1,0 +1,27 @@
+# configs/synthetic_pairs.yaml on the whole synthetic set (data/synthetic, made by
+# dvae-make-synthetic) instead of a 1000-sound subset: two overlapping notes per mixture, each
+# in a 1.5-second window. Same model as the dissertation, with a higher learning rate.
+#
+#   dvae-train configs/synthetic_pairs_full.yaml
+#   dvae-train --resume runs/synthetic_pairs_full epochs=100      # keep going
+#
+# Any option not given keeps its default (see configs/rwc_k5.yaml for all of them).
+
+train_data: data/synthetic/train
+val_data: data/synthetic/val    # all sounds of both: 3000 train (75 steps per epoch), 300 val
+out: runs/synthetic_pairs_full
+
+duration: 1.5                   # seconds per example; the notes last 0.4 to 2.5 s (median 1.3)
+max_sounds: 1                   # one note per stream, so two notes per mixture
+max_silence: 0.25               # each note starts after up to 0.25 s: the notes overlap
+epochs: 50
+lr: 7.0e-4                       # default 1e-4
+num_workers: 2
+batch_size: 64
+
+monitor: val_loss               # best.pt, early stopping, lr schedule (SI-SDR is still logged)
+# patience: 15
+# lr_patience: 5
+log_interval: 10
+plot_interval: 1
+tensorboard: true

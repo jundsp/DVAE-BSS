@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import soundfile as sf
 import torch
+from matplotlib.figure import Figure
 
 from dvae_bss import Separator, load_model
 from dvae_bss.data import PremixedDataset
@@ -35,7 +36,7 @@ def active_span(wave: np.ndarray, sample_rate: int, threshold: float = 1e-4) -> 
     return slice(max(active[0] - sample_rate // 10, 0), active[-1] + sample_rate // 10)
 
 
-def draw_example(mix: np.ndarray, targets: np.ndarray, estimates: np.ndarray, rate: int):
+def draw_example(mix: np.ndarray, targets: np.ndarray, estimates: np.ndarray, rate: int) -> Figure:
     """Figure with the mixture on top, true sources in the middle and estimates below."""
     span = active_span(mix, rate)
     n = len(targets)

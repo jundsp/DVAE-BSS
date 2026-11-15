@@ -8,9 +8,9 @@ import soundfile as sf
 
 SAMPLE_RATE = 16000
 
-TINY_MODEL = [
-    "--layer-channels", "4", "8", "8", "--num-sources", "2", "--latent-dim", "4", "--rnn-dim", "8",
-]  # fmt: skip
+CONFIGS = Path(__file__).parents[1] / "configs"
+
+TINY_MODEL = ["layer_channels=[4, 8, 8]", "num_sources=2", "latent_dim=4", "rnn_dim=8"]
 
 
 def note(pitch_hz: float, seconds: float = 0.5, rng=None) -> np.ndarray:
@@ -44,8 +44,9 @@ def write_premixed(folder: Path, n: int = 4) -> Path:
     return folder
 
 
-# Options of dvae-train for a tiny, fast run on the synthetic notes.
+# dvae-train arguments for a tiny, fast run on the synthetic notes: the shipped config, then
+# overrides. Add train_data=..., out=... and more overrides after them.
 TRAIN = [
-    "--duration", "2", "--batch-size", "4", "--num-workers", "0", "--device", "cpu",
-    "--log-interval", "1", *TINY_MODEL,
+    str(CONFIGS / "rwc_k5.yaml"), "duration=2", "batch_size=4", "num_workers=0", "device=cpu",
+    "log_interval=1", *TINY_MODEL,
 ]  # fmt: skip

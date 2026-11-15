@@ -1,0 +1,15 @@
+# The synthetic notes of `dvae-make-synthetic --out data/synthetic` (not from the dissertation).
+#
+#   dvae-train configs/synthetic.yaml
+#
+# Any option not given keeps the default of `dvae-train` (see configs/rwc_k5.yaml for all of them).
+
+train_data: data/synthetic/train
+val_data: data/synthetic/val
+out: runs/syn
+
+# Stop when the validation loss stalls (SI-SDR of the validation mixtures is still logged).
+monitor: val_loss
+patience: 30
+lr_patience: 10
+tensorboard: true

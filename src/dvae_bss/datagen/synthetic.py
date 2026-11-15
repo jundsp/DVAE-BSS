@@ -13,7 +13,7 @@ notes per split, organised by family and named ``<midi>_<family>_<index>.wav``, 
 test set (``mix.json`` + ``audio/``) for ``dvae-evaluate``.
 
     dvae-make-synthetic --out data/synthetic
-    dvae-train --train-data data/synthetic/train --val-data data/synthetic/val --out runs/syn
+    dvae-train configs/synthetic.yaml
     dvae-evaluate -m runs/syn/model.pt -d data/synthetic/test -o results/syn
 """
 

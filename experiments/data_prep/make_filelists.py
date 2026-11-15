@@ -3,7 +3,7 @@
 ``dvae-train`` can hold out validation files itself; use this when the split should be fixed
 and reused (for example to keep test sounds away from training). Each list has one path per
 line, relative to ``--output`` (``--output`` defaults to the audio folder), and can be passed
-to ``dvae-train --train-data`` and ``--val-data``.
+as ``train_data`` and ``val_data`` in a ``dvae-train`` config.
 
     python experiments/data_prep/make_filelists.py --audio data/notes --fractions 0.9 0.05 0.05
 """

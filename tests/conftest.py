@@ -39,5 +39,5 @@ def run(tmp_path_factory):
 
     root = tmp_path_factory.mktemp("trained")
     notes = write_notes(root / "notes")
-    train.main(["--train-data", str(notes), "--out", str(root / "run"), "--epochs", "2", *TRAIN])
+    train.main([*TRAIN, f"train_data={notes}", f"out={root / 'run'}", "epochs=2"])
     return root

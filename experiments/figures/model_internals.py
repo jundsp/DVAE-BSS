@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import Any
 
 import matplotlib
 
@@ -32,7 +33,12 @@ def log_spectrogram(magnitude: torch.Tensor, floor: float = 1e-4) -> np.ndarray:
     return magnitude.clamp_min(floor).log().numpy()
 
 
-def row_of_images(images: list[np.ndarray], filename: Path, titles=None, **kwargs) -> None:
+def row_of_images(
+    images: list[np.ndarray],
+    filename: Path,
+    titles: list[str] | None = None,
+    **kwargs: Any,
+) -> None:
     """Images side by side with shared axes."""
     fig, axes = plt.subplots(
         1, len(images), figsize=(1.6 * len(images) + 0.4, 2), sharey=True, squeeze=False

@@ -1,0 +1,32 @@
+# Pairs of overlapping notes from the synthetic set (data/synthetic, made by
+# dvae-make-synthetic; unrelated to the TwoNote test set). Each stream is one note in a
+# 1.5-second window, starting after up to 0.25 s of silence, so the two notes of a mixture
+# sound together almost from the start. Short, simple mixtures make epochs quick and
+# separation shows up early. Same model as the dissertation, with a higher learning rate.
+#
+#   dvae-train configs/synthetic_pairs.yaml
+#   dvae-train --resume runs/synthetic_pairs epochs=100      # keep going
+#
+# Any option not given keeps its default (see configs/rwc_k5.yaml for all of them).
+
+train_data: data/synthetic/train
+val_data: data/synthetic/val
+max_train_sounds: 1000          # 50 steps per epoch at batch_size 20
+max_val_sounds: 100             # 5 validation batches, scored with SI-SDR
+out: runs/synthetic_pairs
+
+duration: 1.5                   # seconds per example; the notes last 0.4 to 2.5 s (median 1.3)
+max_sounds: 1                   # one note per stream, so two notes per mixture
+max_silence: 0.25               # each note starts after up to 0.25 s: the notes overlap
+epochs: 50
+lr: 7.0e-4                       # default 1e-4
+num_workers: 2
+batch_size: 40
+
+monitor: val_loss               # best.pt, early stopping, lr schedule (SI-SDR is still logged)
+# patience: 15
+# lr_patience: 5
+log_interval: 10
+plot_interval: 1
+tensorboard: true
+

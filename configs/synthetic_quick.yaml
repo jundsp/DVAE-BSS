@@ -1,0 +1,26 @@
+# A small run to watch whole epochs, plots and early stopping go by in minutes: a subset of
+# the synthetic notes, shorter streams and plots every other epoch. The model is the full
+# dissertation model, so the code paths are those of a real run.
+#
+#   dvae-make-synthetic --out data/synthetic      # once, if data/synthetic is missing
+#   dvae-train configs/synthetic_quick.yaml
+#   dvae-train --resume runs/synthetic_quick epochs=60      # keep going
+#
+# Any option not given keeps its default (see configs/rwc_k5.yaml for all of them).
+
+train_data: data/synthetic/train
+val_data: data/synthetic/val
+max_train_sounds: 400           # 20 steps per epoch at batch_size 20
+max_val_sounds: 60              # 3 validation batches, scored with SI-SDR
+out: runs/synthetic_quick
+
+duration: 4.0                   # seconds per stream (default 8)
+epochs: 30
+num_workers: 2
+
+monitor: val_loss               # best.pt, early stopping, lr schedule (SI-SDR is still logged)
+patience: 10
+lr_patience: 5
+log_interval: 5
+plot_interval: 2
+tensorboard: true

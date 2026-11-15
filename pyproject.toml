@@ -13,6 +13,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "Julian Neri", email = "43224513+jundsp@users.noreply.github.com" }]
 dependencies = [
     "numpy",
+    "pyyaml",
     "scipy",
     "soundfile",
     "torch",
@@ -28,8 +29,10 @@ dvae-make-twonote = "dvae_bss.datagen.twonote:main"
 
 [project.optional-dependencies]
 plots = ["matplotlib"]
+# Training plots, plus TensorBoard (tensorboard: true in a dvae-train config).
+monitor = ["matplotlib", "tensorboard"]
 experiments = ["matplotlib", "pandas", "scikit-learn", "seaborn"]
-dev = ["matplotlib", "pytest", "ruff"]
+dev = ["matplotlib", "pytest", "ruff", "tensorboard"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -43,8 +46,9 @@ target-version = "py310"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "D", "TID"]
-ignore = ["D105", "D107"]
+select = ["E", "F", "I", "UP", "B", "D", "TID", "ANN"]
+# ANN401: ``Any`` is fine for **kwargs passed through to another function.
+ignore = ["D105", "D107", "ANN401"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
@@ -53,6 +57,6 @@ ban-relative-imports = "all"
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["D"]
+"tests/*" = ["D", "ANN"]
 "experiments/*" = ["D103"]
 "src/dvae_bss/layers.py" = ["D102"]  # forward() of small building blocks

@@ -8,8 +8,7 @@ r"""Mixture invariant training (MixIT, Wisdom et al. 2020) with the DVAE's netwo
            ``K`` estimates are grouped into the reference sources with the split that gives the
            best SI-SDR (an *oracle* grouping, as is usual for MixIT evaluation).
 
-    python experiments/baselines/mixit.py train --train-data data/notes --out runs/mixit \\
-        --num-sources 4
+    python experiments/baselines/mixit.py train configs/rwc_k5.yaml out=runs/mixit num_sources=4
     python experiments/baselines/mixit.py eval --model runs/mixit/model.pt --data data/rwc_test
 """
 
@@ -28,6 +27,7 @@ from torch.utils.data import DataLoader
 from dvae_bss import DVAE, CompressedSTFT, load_checkpoint, save_checkpoint
 from dvae_bss.cli import train as dvae_train
 from dvae_bss.cli.common import resolve_device
+from dvae_bss.config import ConfigError, load_config
 from dvae_bss.data import NoteSequenceDataset, PremixedDataset, mix_batch
 from dvae_bss.evaluation import evaluate_methods, print_summary
 from dvae_bss.metrics import bss_metrics
@@ -56,36 +56,48 @@ def mixit_loss(sources: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
 
 
 def train(args: argparse.Namespace) -> None:
-    """Train the MixIT auto-encoder."""
-    if args.num_sources % 2:
+    """Train the MixIT auto-encoder with the options of a ``dvae-train`` config file."""
+    files = [item for item in args.items if "=" not in item]
+    overrides = [item for item in args.items if "=" in item]
+    if len(files) > 1:
+        raise SystemExit(f"one config file at most, got {files}")
+    try:
+        cfg = load_config(files[0] if files else None, overrides, defaults={"num_sources": 4})
+    except ConfigError as error:
+        raise SystemExit(str(error)) from None
+    if cfg.train_data is None:
+        raise SystemExit("train_data is not set")
+    if cfg.num_sources % 2:
         raise SystemExit("--num-sources must be even")
-    device = resolve_device(args.device)
-    torch.manual_seed(args.seed)
-    stft = CompressedSTFT(compression=args.compression, sample_rate=dvae_train.SAMPLE_RATE)
-    model = dvae_train.build_model(args, stft, autoencoder=True).to(device)
-    train_files, val_files = dvae_train.split_files(args)
+    device = resolve_device(cfg.device)
+    torch.manual_seed(cfg.seed)
+    stft = CompressedSTFT(compression=cfg.compression, sample_rate=dvae_train.SAMPLE_RATE)
+    model = dvae_train.build_model(cfg, stft, autoencoder=True).to(device)
+    train_files, val_files = dvae_train.split_files(cfg)
     loaders = {
         name: DataLoader(
             NoteSequenceDataset(
                 files,
-                duration=args.duration,
+                duration=cfg.duration,
                 sample_rate=stft.sample_rate,
+                max_sounds=cfg.max_sounds,
+                max_silence=cfg.max_silence,
                 augment_levels=True,
-                seed=None if name == "train" else args.seed,
+                seed=None if name == "train" else cfg.seed,
             ),
-            batch_size=min(args.batch_size, len(files)),
+            batch_size=min(cfg.batch_size, len(files)),
             drop_last=True,
-            num_workers=args.num_workers,
+            num_workers=cfg.num_workers,
         )
         for name, files in (("train", train_files), ("val", val_files))
-        if len(files) >= max(args.num_targets, 2)  # a mixture needs at least this many sounds
+        if len(files) >= max(cfg.num_targets, 2)  # a mixture needs at least this many sounds
     }
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=2e-5)
-    args.out.mkdir(parents=True, exist_ok=True)
-    with open(args.out / "log.csv", "w", newline="") as log:
+    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=2e-5)
+    cfg.out.mkdir(parents=True, exist_ok=True)
+    with open(cfg.out / "log.csv", "w", newline="") as log:
         writer = csv.writer(log)
         writer.writerow(["epoch", "train_loss", "val_loss", "seconds"])
-        for epoch in range(1, args.epochs + 1):
+        for epoch in range(1, cfg.epochs + 1):
             started, losses = time.time(), {}
             for name, loader in loaders.items():
                 model.train(name == "train")
@@ -93,7 +105,7 @@ def train(args: argparse.Namespace) -> None:
                 with torch.set_grad_enabled(name == "train"):
                     for streams in loader:
                         # Mix two streams into a mixture, then two mixtures into the input.
-                        mixture, _ = mix_batch(streams, args.num_targets, random_count=False)
+                        mixture, _ = mix_batch(streams, cfg.num_targets, random_count=False)
                         x, targets = mix_batch(stft.magnitude(mixture.to(device)), 2, False)
                         loss = mixit_loss(mixit_sources(model, x), targets)
                         if name == "train":
@@ -107,13 +119,13 @@ def train(args: argparse.Namespace) -> None:
             log.flush()
             print(f"epoch {epoch:3d}  train {losses['train']:.5f}  val {val:.5f}")
             save_checkpoint(
-                args.out / "model.pt", model, stft, extra={"epoch": epoch, "method": "mixit"}
+                cfg.out / "model.pt", model, stft, extra={"epoch": epoch, "method": "mixit"}
             )
 
 
 @torch.no_grad()
 def separate_oracle(
-    model: DVAE, stft: CompressedSTFT, batch: dict[str, Any], device
+    model: DVAE, stft: CompressedSTFT, batch: dict[str, Any], device: torch.device
 ) -> torch.Tensor:
     """Two source estimates per mixture, grouping the ``K`` outputs with the best oracle split."""
     mix, stems = batch["mix"].to(device), batch["stems"].to(device)
@@ -159,9 +171,12 @@ def main(argv: list[str] | None = None) -> None:
     """Command-line entry point with ``train`` and ``eval`` subcommands."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
-    # Training takes the same data and model options as dvae-train (the prior is not used).
-    train_parser = commands.add_parser("train", parents=[dvae_train.build_parser(add_help=False)])
-    train_parser.set_defaults(num_sources=4, run=train)
+    # Training takes the config files and options of dvae-train (the prior is not used).
+    train_parser = commands.add_parser("train", help="train on a dvae-train config")
+    train_parser.add_argument(
+        "items", nargs="+", metavar="CONFIG | key=value", help="config file, then overrides"
+    )
+    train_parser.set_defaults(run=train)
     eval_parser = commands.add_parser("eval", help="evaluate with oracle grouping")
     eval_parser.add_argument("-m", "--model", type=Path, required=True)
     eval_parser.add_argument("-d", "--data", type=Path, required=True)

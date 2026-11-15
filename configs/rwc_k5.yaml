@@ -1,0 +1,51 @@
+# The dissertation's RWC model (pretrained/dvae_rwc_k5.pt): K = 5 outputs, mixtures of two notes.
+#
+#   dvae-train configs/rwc_k5.yaml
+#   dvae-train configs/rwc_k5.yaml epochs=10 out=runs/k5_test   # overrides
+#   dvae-train --resume runs/k5                                # continue
+#
+# Every option is listed with its default; a config only needs those that differ.
+# Regenerate with: dvae-train --print-config train_data=data/notes out=runs/k5
+
+# Data and run folder.
+train_data: data/notes                   # folder of isolated sounds, or a file list
+val_data: null                           # null: hold out 5% of train_data
+max_train_sounds: null                   # null: all; else a fixed random subset
+max_val_sounds: null                     # null: all; else a fixed random subset
+out: runs/k5                             # run folder
+
+# Model and mixtures (what the dissertation's experiments varied).
+num_sources: 5                           # model outputs K
+num_targets: 2                           # streams added into each mixture
+random_count: false                      # true: 1 to num_targets streams per mixture
+compression: 0.5                         # magnitude exponent c
+variance: 0.1                            # likelihood variance
+encoder: strided                         # strided | dilated
+rnn_type: lstm                           # lstm | gru
+laplace: false                           # Laplace instead of Normal likelihood
+latent_dim: 256                          # size of the latent state
+rnn_dim: 512                             # size of the recurrent networks
+layer_channels: [32, 64, 128, 128, 128]  # encoder channels
+
+# Optimisation.
+duration: 8.0                            # seconds per stream
+max_sounds: 20                           # sounds per stream at most (1: one note per stream)
+max_silence: 0.5                         # random silence before each sound, up to (seconds)
+epochs: 500                              # last epoch
+batch_size: 20                           # streams per step and GPU
+lr: 0.0001                               # learning rate (AdamW)
+num_workers: 4                           # data loading processes
+seed: 1                                  # random seed
+device: auto                             # auto | cuda | mps | cpu
+clip_grad_norm: null                     # e.g. 1.0 to clip the gradient norm
+max_skipped: 20                          # non-finite steps skipped per epoch before giving up
+
+# Best model, early stopping, learning-rate schedule and monitoring.
+monitor: val_loss                        # val_loss | val_sdr: picks best.pt, early stopping and the lr schedule
+patience: 0                              # stop after this many epochs without progress (0: never)
+min_delta: 0.0                           # smallest change that counts as progress
+lr_patience: 0                           # lower the lr after this many flat epochs (0: never)
+lr_factor: 0.5                           # factor applied to the lr
+log_interval: 10                         # steps between progress lines
+plot_interval: 5                         # epochs between example plots and audio (0: never)
+tensorboard: false                       # also log to <out>/tensorboard

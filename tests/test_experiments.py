@@ -79,9 +79,7 @@ def test_mixit_train_and_eval(tmp_path, test_set):
     mixit = script("baselines/mixit.py")
     notes = write_notes(tmp_path / "notes")
     model_dir = tmp_path / "mixit"
-    mixit.main(
-        ["train", "--train-data", str(notes), "--out", str(model_dir), "--epochs", "1", *TRAIN]
-    )
+    mixit.main(["train", *TRAIN, f"train_data={notes}", f"out={model_dir}", "epochs=1"])
     assert (model_dir / "model.pt").exists() and (model_dir / "log.csv").exists()
     mixit.main(["eval", "-m", str(model_dir / "model.pt"), "-d", str(test_set),
                 "-o", str(tmp_path / "ev"), "--device", "cpu"])  # fmt: skip

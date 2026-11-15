@@ -11,7 +11,9 @@ each mixture). This replaces the compression, sources and variance figures of th
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import matplotlib
 
@@ -19,6 +21,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+from matplotlib.axes import Axes
 
 from dvae_bss.plotting import style
 
@@ -49,7 +52,13 @@ def load_runs(paths: list[Path], labels: list[str], exclude: list[str]) -> pd.Da
     return data
 
 
-def facet(data: pd.DataFrame, draw, filename: Path, size=(8.5, 3), **kwargs) -> None:
+def facet(
+    data: pd.DataFrame,
+    draw: Callable[..., None],
+    filename: Path,
+    size: tuple[float, float] = (8.5, 3),
+    **kwargs: Any,
+) -> None:
     """One panel per metric, drawn with ``draw(data=..., y=metric, ax=...)``."""
     fig, axes = plt.subplots(1, 3, figsize=size)
     for ax, metric in zip(axes, METRICS.values(), strict=True):
@@ -84,11 +93,11 @@ def main(argv: list[str] | None = None) -> None:
     data = load_runs(args.results, labels, args.exclude_instrument)
     args.out.mkdir(parents=True, exist_ok=True)
 
-    def box(*, data, y, ax, **kwargs):
+    def box(*, data: pd.DataFrame, y: str, ax: Axes, **kwargs: Any) -> None:
         sns.boxplot(data=data, x="setting", y=y, ax=ax, **kwargs)
         ax.set_xlabel(args.xlabel)
 
-    def line(*, data, y, ax, **kwargs):
+    def line(*, data: pd.DataFrame, y: str, ax: Axes, **kwargs: Any) -> None:
         sns.pointplot(data=data, x="setting", y=y, ax=ax, **kwargs)
         ax.set_xlabel(args.xlabel)
 
