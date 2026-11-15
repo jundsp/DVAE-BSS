@@ -64,3 +64,21 @@ def test_load_legacy_files(tmp_path):
 def test_legacy_rejects_removed_variants(override):
     with pytest.raises(ValueError):
         config_from_legacy_args(dict(LEGACY_ARGS, **override))
+
+
+def test_save_checkpoint_keeps_the_old_file_if_saving_fails(tmp_path, monkeypatch):
+    from dvae_bss.checkpoint import read_checkpoint
+
+    model, stft = DVAE(n_freq=257, latent_dim=4, rnn_dim=8, num_sources=2), CompressedSTFT()
+    path = tmp_path / "resume.pt"
+    save_checkpoint(path, model, stft, {"epoch": 1})
+
+    def crash(obj, f):
+        open(f, "wb").write(b"half a file")
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(torch, "save", crash)
+    with pytest.raises(KeyboardInterrupt):
+        save_checkpoint(path, model, stft, {"epoch": 2})
+    assert read_checkpoint(path)[2] == {"epoch": 1}
+    assert [p.name for p in tmp_path.iterdir()] == ["resume.pt"]

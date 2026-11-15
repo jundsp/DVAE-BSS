@@ -164,6 +164,10 @@ def resumed_config(run: Path, overrides: list[str]) -> TrainConfig:
     Raises:
         ConfigError: If an override changes the model or the run folder.
     """
+    if run.suffix in (".yaml", ".yml", ".json"):
+        raise ConfigError(
+            f"--resume takes a run folder (the out= of a run), not a config file: {run}"
+        )
     if run.suffix == ".pt":
         run = run.parent
     if not (run / "resume.pt").exists():
@@ -645,12 +649,11 @@ def main(argv: list[str] | None = None) -> None:
             f"{cfg.out} already holds a run: continue it with --resume {cfg.out}, "
             "or choose another folder with out=..."
         )
-    previous = None
+    # Every process reads the earlier options, before process 0 replaces them below.
+    saved = cfg.out / "config.yaml"
+    previous = load_config(saved) if resuming and saved.exists() else None
     if is_main:
         cfg.out.mkdir(parents=True, exist_ok=True)
-        saved = cfg.out / "config.yaml"
-        if resuming and saved.exists():
-            previous = load_config(saved)
         header = f"Options of this run. Continue it with: dvae-train --resume {cfg.out}"
         save_config(cfg, saved, header)
     # Only process 0 talks and writes files; the others report warnings and errors only.
@@ -660,7 +663,7 @@ def main(argv: list[str] | None = None) -> None:
             logger.info(f"option changed on resume: {name} {old} -> {new}")
     board = Board(cfg.out / "tensorboard" if cfg.tensorboard and is_main else None)
     try:
-        run(cfg, resuming, rank, world_size, device, board)
+        run(cfg, previous if resuming else None, resuming, rank, world_size, device, board)
     except Exception:
         logger.exception("training failed")
         raise
@@ -673,18 +676,28 @@ def main(argv: list[str] | None = None) -> None:
 
 def run(
     cfg: TrainConfig,
+    previous_cfg: TrainConfig | None,
     resuming: bool,
     rank: int,
     world_size: int,
     device: torch.device,
     board: Board,
 ) -> None:
-    """The training run of :func:`main`, once logging and processes are set up."""
+    """The training run of :func:`main`, once logging and processes are set up.
+
+    ``previous_cfg`` holds the options a resumed run was started with, if known.
+    """
     is_main = rank == 0
 
     # Model. A resumed run takes the architecture and its state from resume.pt.
     if resuming:
-        model, stft, resume = read_checkpoint(cfg.out / "resume.pt")
+        try:
+            model, stft, resume = read_checkpoint(cfg.out / "resume.pt")
+        except (RuntimeError, EOFError) as error:  # cut short by a run stopped while saving
+            raise SystemExit(
+                f"{cfg.out / 'resume.pt'} is damaged ({error.__class__.__name__}): the run was "
+                "probably stopped while saving it. Start a new run, or resume from a copy."
+            ) from error
         logger.info(f"resuming {cfg.out} after epoch {resume['epoch']}")
     else:
         stft = CompressedSTFT(compression=cfg.compression, sample_rate=SAMPLE_RATE)
@@ -766,6 +779,14 @@ def run(
             stopper.load_state_dict(resume["early_stopping"])
         if scheduler is not None and "scheduler" in resume:
             scheduler.load_state_dict(resume["scheduler"])
+    # The restored optimiser carries the old lr; a new lr= given on resume replaces it. A plain
+    # resume keeps the restored value, which the lr schedule may already have lowered.
+    if previous_cfg is not None and previous_cfg.lr != cfg.lr:
+        for group in optimizer.param_groups:
+            group["lr"] = cfg.lr
+        if scheduler is not None:
+            scheduler._last_lr = [cfg.lr] * len(optimizer.param_groups)
+        logger.info(f"lr set to {cfg.lr:.2e} on resume")
     step = int(resume.get("step", 0))
 
     table = plotter = None

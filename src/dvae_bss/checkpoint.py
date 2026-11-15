@@ -9,6 +9,7 @@ can be loaded with :func:`load_legacy`.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -23,17 +24,25 @@ FORMAT_VERSION = 1
 def save_checkpoint(
     path: str | Path, model: DVAE, stft: CompressedSTFT, extra: dict[str, Any] | None = None
 ) -> None:
-    """Write ``model`` and its front-end settings to ``path``."""
-    torch.save(
-        {
-            "format": FORMAT_VERSION,
-            "model": model.config,
-            "audio": audio_config(stft),
-            "state_dict": model.state_dict(),
-            "extra": extra or {},
-        },
-        path,
-    )
+    """Write ``model`` and its front-end settings to ``path``.
+
+    The file is written next to ``path`` and then renamed over it, so a run stopped while
+    saving (a lost Colab session, Ctrl-C) keeps the previous complete file.
+    """
+    path = Path(path)
+    partial = path.with_name(f".{path.name}.partial")
+    blob = {
+        "format": FORMAT_VERSION,
+        "model": model.config,
+        "audio": audio_config(stft),
+        "state_dict": model.state_dict(),
+        "extra": extra or {},
+    }
+    try:
+        torch.save(blob, partial)
+        os.replace(partial, path)
+    finally:
+        partial.unlink(missing_ok=True)
 
 
 def audio_config(stft: CompressedSTFT) -> dict[str, Any]:

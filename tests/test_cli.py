@@ -52,6 +52,16 @@ def test_resume_takes_the_run_folder_and_saves_overrides(run, tmp_path):
     assert "option changed on resume: epochs 2 -> 3" in (out / "train.log").read_text()
 
 
+def test_resume_with_a_new_lr_uses_it(run, tmp_path):
+    out = copy_run(run, tmp_path / "new_lr")
+    old_lr = load_config(out / "config.yaml").lr
+    train.main(["--resume", str(out), "epochs=3", f"lr={old_lr / 10}"])
+    rows = list(csv.DictReader((out / "log.csv").open()))
+    assert float(rows[-1]["lr"]) == pytest.approx(old_lr / 10)
+    state = torch.load(out / "resume.pt", weights_only=True)["extra"]
+    assert state["optimizer"]["param_groups"][0]["lr"] == pytest.approx(old_lr / 10)
+
+
 def test_resume_from_a_run_with_the_old_config_json(run, tmp_path):
     out = copy_run(run, tmp_path / "old")
     options = config_values(load_config(out / "config.yaml"))
@@ -67,6 +77,7 @@ def test_resume_from_a_run_with_the_old_config_json(run, tmp_path):
         (["--resume", "{out}", "latent_dim=8"], "checkpoint fixes latent_dim"),
         (["--resume", "{out}", "out=elsewhere"], "out cannot be changed"),
         (["--resume", "{out}", "{config}"], "overrides only"),
+        (["--resume", "{config}", "out={out}"], "takes a run folder"),
         (["{config}", "{config}"], "one config file"),
         ([], "give a config file"),
         (["{config}", "epoch=3"], "unknown option 'epoch'"),
@@ -82,6 +93,14 @@ def test_command_line_errors(run, tmp_path, capsys, argv, message):
     with pytest.raises(SystemExit):
         train.parse_command_line(argv)
     assert message in capsys.readouterr().err
+
+
+def test_resume_from_a_damaged_checkpoint_says_so(run, tmp_path):
+    out = copy_run(run, tmp_path / "damaged")
+    data = (out / "resume.pt").read_bytes()
+    (out / "resume.pt").write_bytes(data[: len(data) // 2])
+    with pytest.raises(SystemExit, match="damaged"):
+        train.main(["--resume", str(out)])
 
 
 def test_a_new_run_does_not_overwrite_an_old_one(run, tmp_path):
