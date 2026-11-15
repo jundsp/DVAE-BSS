@@ -71,7 +71,7 @@ def build_parser(add_help: bool = True) -> argparse.ArgumentParser:
     p.add_argument("--batch-size", type=int, default=20, help="streams per step and GPU")
     p.add_argument("--lr", type=float, default=1e-4)
     p.add_argument("--num-workers", type=int, default=4)
-    p.add_argument("--log-interval", type=int, default=50, help="steps between progress lines")
+    p.add_argument("--log-interval", type=int, default=10, help="steps between progress lines")
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--device", default="auto")
     return p
@@ -115,7 +115,14 @@ def setup_distributed(device: torch.device) -> tuple[int, int, torch.device]:
 
 
 def run_epoch(
-    model, loader, loss_fn, stft, num_targets, optimizer=None, log_interval=0, random_count=False
+    model: DVAE,
+    loader: DataLoader,
+    loss_fn: torch.nn.Module,
+    stft: CompressedSTFT,
+    num_targets,
+    optimizer=None,
+    log_interval=0,
+    random_count=False,
 ):
     """One pass over ``loader``, training if an optimizer is given. Returns mean loss, ELL, KLD."""
     training = optimizer is not None
